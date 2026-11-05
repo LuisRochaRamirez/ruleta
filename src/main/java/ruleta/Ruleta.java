@@ -21,6 +21,8 @@ public final class Ruleta {
         System.out.println("cargada muestra nueva de: " + cantidad + " registros");
     }
 
+
+
     /**
      * Prueba un esquema de apuesta recorriendo el 'juego' y devuelve el retorno
      * acumulado (beneficio neto). Por ahora esqueleto: recorre, reparte el calor
@@ -59,7 +61,7 @@ public final class Ruleta {
 
     public void asignarCalor() {
         limpiarCalor();
-        Arrays.stream(juego).forEach(this::calculaCalor);
+        calculaCalor();
     }
 
     public void limpiarCalor() {
@@ -70,7 +72,71 @@ public final class Ruleta {
      * Algoritmo de calor. ESQUELETO: aquí va tu lógica.
      * Recibe el resultado 'valor' recién salido y actualiza el calor del tablero.
      */
-    public void calculaCalor(Valor valor) {
-        // TODO: aquí va el algoritmo (asignar calor según rachas por atributo)
+    public void calculaCalor() {
+        // TODO: aquí va el algoritmo (asignar calor según rachas por dimension)
+
+        /**
+         * Para cada dimension binaria asignar la formula de asignacion de calor
+         *
+         * empezaremos revisando los rojos
+         *
+         * para el numero de datos leidos previamente se espera que exista 1/2 de rojos
+         * de todos los rojos se espera que 1/2 sean rachas de 1
+         * de todas las las rachas de 2 se espera que 1/2 sean rachas de 3
+         * sucesivamente
+         *
+         * OPCIONAL: el valor de calor inicial para cada numero es 1/37 que es la probabilidad individual de numero pleno
+         *
+         * debo saber en que elemento estoy y ver el pasado, la cantidad de rachas esperadas al momento vs las no cumplidas y esperar a que se cumplan
+         *
+         *
+         */
+
+        //empezamos por racha de rojos
+        for (int i=0;i<juego.length;i++) {
+
+            int rachas1RojoOcurridas=contadorRacha(Atributo.ROJO, 1, i, juego);
+            int rachas2RojoOcurridas=contadorRacha(Atributo.ROJO, 2, i, juego);
+            int rachas3RojoOcurridas=contadorRacha(Atributo.ROJO, 3, i, juego);
+            int rachas4RojoOcurridas=contadorRacha(Atributo.ROJO, 4, i, juego);
+            int rachas5RojoOcurridas=contadorRacha(Atributo.ROJO, 5, i, juego);
+            int rachas6RojoOcurridas=contadorRacha(Atributo.ROJO, 6, i, juego);
+            int rachas7RojoOcurridas=contadorRacha(Atributo.ROJO, 7, i, juego);
+            int rachas8RojoOcurridas=contadorRacha(Atributo.ROJO, 8, i, juego);
+
+            int rachas1RojoEsperadas=(int)(juego.length*(18/37)*0.5);
+            int rachas2RojoEsperadas=(int)(rachas1RojoEsperadas/2);
+            int rachas3RojoEsperadas=(int)(rachas2RojoEsperadas/2);
+            int rachas4RojoEsperadas=(int)(rachas3RojoEsperadas/2);
+            int rachas5RojoEsperadas=(int)(rachas4RojoEsperadas/2);
+            int rachas6RojoEsperadas=(int)(rachas5RojoEsperadas/2);
+            int rachas7RojoEsperadas=(int)(rachas6RojoEsperadas/2);
+            int rachas8RojoEsperadas=rachas7RojoEsperadas;
+
+            //este es el valor de este giro
+            Valor resultadoActual = juego [i];
+
+            //si el resultado es R estoy en una racha de 1 a n, debo ver en cual de esas rachas podria estoy y hasta cual podria llegar
+            boolean iniciaRacha2Rojo = (resultadoActual.color == Atributo.ROJO);
+            if (iniciaRacha2Rojo) {
+
+                if (rachas1RojoOcurridas < rachas1RojoEsperadas){//quiza poner un criterio conservador de una variacion esperada segun las mediciones, quiza de un 3%
+                    //espero que sea racha de 1, es decir los valores del tablero que rompen la racha suman un calor de 0.5 * rachas1RojoEsperadas - rachas1RojoOcurridas
+                }
+
+                //Si el resulatdo es R o RR y ademas hay una deficiencia conservadora de rachas de 2 rojo
+                boolean esRR= (i>0 && juego[i-1].color == Atributo.ROJO);
+                if (iniciaRacha2Rojo && rachas2RojoOcurridas < rachas2RojoEsperadas){//quiza poner un criterio conservador de una variacion esperada segun las mediciones, quiza de un 5%
+                    //espero una racha de 2, es decir los valores del tablero que rompen la racha suman un valor de 0.5*0.5 * cada giro faltante para equiparar las rachas de 2 con sus esperadas
+
+                }
+            }
+
+
+
+        }
+
+
+
     }
 }
