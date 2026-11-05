@@ -46,16 +46,31 @@ public enum Valor {
 
     public int valor, color, paridad, altobajo, franja;
 
-    public BigDecimal calorColor;
-    public BigDecimal calorParidad;
-    public BigDecimal calorUpdown;
-    public BigDecimal calorFranja;
-    public BigDecimal calorAltoBajo;
+    // Calor por dimensión. Inicializados en ZERO: antes eran null y cualquier
+    // .add() lanzaba NullPointerException.
+    public BigDecimal calorColor = BigDecimal.ZERO;
+    public BigDecimal calorParidad = BigDecimal.ZERO;
+    public BigDecimal calorUpdown = BigDecimal.ZERO;
+    public BigDecimal calorFranja = BigDecimal.ZERO;
+    public BigDecimal calorAltoBajo = BigDecimal.ZERO;
 
-    public BigDecimal calorColorAlterno;
-    public BigDecimal calorParidadAlterno;
-    public BigDecimal calorUpdownAlterno;
-    public BigDecimal calorAltoBajoAlterno;
+    public BigDecimal calorColorAlterno = BigDecimal.ZERO;
+    public BigDecimal calorParidadAlterno = BigDecimal.ZERO;
+    public BigDecimal calorUpdownAlterno = BigDecimal.ZERO;
+    public BigDecimal calorAltoBajoAlterno = BigDecimal.ZERO;
+
+    /** Calor total del número = suma del calor de todas las dimensiones. */
+    public BigDecimal calorTotal() {
+        return calorColor.add(calorParidad).add(calorUpdown).add(calorFranja).add(calorAltoBajo)
+                .add(calorColorAlterno).add(calorParidadAlterno).add(calorUpdownAlterno)
+                .add(calorAltoBajoAlterno);
+    }
+
+    /** Pone en cero el calor de todas las dimensiones. */
+    public void limpiarCalor() {
+        calorColor = calorParidad = calorUpdown = calorFranja = calorAltoBajo = BigDecimal.ZERO;
+        calorColorAlterno = calorParidadAlterno = calorUpdownAlterno = calorAltoBajoAlterno = BigDecimal.ZERO;
+    }
 
     Valor(int valor, int color, int paridad, int altobajo, int franja) {
         this.valor = valor;
