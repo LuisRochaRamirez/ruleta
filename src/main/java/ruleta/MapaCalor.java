@@ -27,13 +27,13 @@ public final class MapaCalor {
         public double hitRate() { return apuestas == 0 ? 0 : (double) aciertos / apuestas; }
     }
 
-    private static final double PUNTO = 18.0;
-    private static final double EPS = 0.15;
+    public static final double PUNTO = 18.0;
+    public static final double EPS = 0.15;
 
-    private MapaCalor() {}
+    public MapaCalor() {}
 
     // estado de racha por dimensión
-    private static final class Reloj {
+    public static final class Reloj {
         Boolean lado; int K;
         // para CALENDARIO: créditos por lado hacia cada nivel
         final Map<Boolean, Map<Integer,Integer>> tau = new HashMap<>();
@@ -49,7 +49,7 @@ public final class MapaCalor {
             if (s.equals(lado)) K++;
             else { cerrar(); lado = s; K = 1; }
         }
-        private void cerrar() {
+        public void cerrar() {
             if (K > 0 && lado != null) {
                 var m = tau.get(lado);
                 m.merge(K + 1, 1, Integer::sum);
@@ -77,7 +77,7 @@ public final class MapaCalor {
         }
     }
 
-    public static Resultado simular(int[] datos, Formula formula, int tam) {
+    public Resultado simular(int[] datos, Formula formula, int tam) {
         Reloj rc = new Reloj(), rp = new Reloj(), rh = new Reloj();
         int apuestas = 0, aciertos = 0; long cobertura = 0;
         double beneficio = 0, apostado = 0;
@@ -99,7 +99,7 @@ public final class MapaCalor {
         return new Resultado(apuestas, aciertos, cob, apostado == 0 ? 0 : beneficio / apostado);
     }
 
-    private static double[] calor(Reloj rc, Reloj rp, Reloj rh, Formula f) {
+    public static double[] calor(Reloj rc, Reloj rp, Reloj rh, Formula f) {
         double[] heat = new double[37];
         aporte(heat, rc, Ruleta::color, f);
         aporte(heat, rp, Ruleta::parity, f);
@@ -107,7 +107,7 @@ public final class MapaCalor {
         return heat;
     }
 
-    private static void aporte(double[] heat, Reloj r,
+    public static void aporte(double[] heat, Reloj r,
                                java.util.function.IntFunction<Boolean> dim, Formula f) {
         double p = r.pProl(f);
         if (Double.isNaN(p)) return;
@@ -119,7 +119,7 @@ public final class MapaCalor {
         }
     }
 
-    private static Set<Integer> calientes(double[] heat, int tam) {
+    public static Set<Integer> calientes(double[] heat, int tam) {
         Integer[] vals = new Integer[36];
         for (int v = 1; v <= 36; v++) vals[v - 1] = v;
         Arrays.sort(vals, (a, b) -> Double.compare(heat[b], heat[a]));

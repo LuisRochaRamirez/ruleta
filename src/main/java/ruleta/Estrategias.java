@@ -18,14 +18,14 @@ public final class Estrategias {
         public double ev() { return apostado == 0 ? 0 : beneficio / apostado; }
     }
 
-    private Estrategias() {}
+    public Estrategias() {}
 
     /**
      * B6: espera racha de 'disparo' bajadas en updown y apuesta a "sube" con una
      * progresión ACOTADA (p.ej. {1,3,8,20}). Pago even-money 1:1 ASUMIDO.
      * Ojo: sube/baja NO es una apuesta real de ruleta (ver documentación).
      */
-    public static Resultado antiBajadasUpdown(int[] datos, int disparo, double[] progresion) {
+    public Resultado antiBajadasUpdown(int[] datos, int disparo, double[] progresion) {
         Boolean[] ud = Rachas.serieUpdown(datos);
         double balance = 0, apostado = 0;
         int ciclos = 0, ganados = 0, perdidos = 0, downRun = 0, n = ud.length, i = 0;
@@ -56,7 +56,7 @@ public final class Estrategias {
      * F7: tras racha de columna de nivel >= kMin, apuesta FIJA 'stake' a las
      * otras 2 columnas (apuesta a que se rompe). Columna paga 2:1.
      */
-    public static Resultado columnasRompe(int[] datos, int kMin, int kMax, double stake) {
+    public Resultado columnasRompe(int[] datos, int kMin, int kMax, double stake) {
         double balance = 0, apostado = 0; int bets = 0, hits = 0;
         Integer cur = null; int clen = 0, n = datos.length;
         for (int i = 0; i < n; i++) {

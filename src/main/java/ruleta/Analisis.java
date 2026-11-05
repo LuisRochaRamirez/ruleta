@@ -5,10 +5,10 @@ import java.util.*;
 /** Análisis estadístico: conteos de rachas por dimensión y firma de reversión de updown. */
 public final class Analisis {
 
-    private Analisis() {}
+    public Analisis() {}
 
     /** Tabla de conteo de rachas por nivel para las dimensiones principales. */
-    public static void tablaRachas(int[] d) {
+    public void tablaRachas(int[] d) {
         System.out.println("CANTIDAD DE RACHAS POR NIVEL (n=" + d.length + ")");
         imprimir("color",   Rachas.conteoPorNivel(Rachas.rachas(Rachas.serie(d, Ruleta::color))));
         imprimir("parity",  Rachas.conteoPorNivel(Rachas.rachas(Rachas.serie(d, Ruleta::parity))));
@@ -18,7 +18,7 @@ public final class Analisis {
         imprimir("updown",  Rachas.conteoPorNivel(Rachas.rachas(Rachas.serieUpdown(d))));
     }
 
-    private static void imprimir(String nombre, Map<Integer,Integer> c) {
+    public static void imprimir(String nombre, Map<Integer,Integer> c) {
         StringBuilder sb = new StringBuilder(String.format("  %-8s:", nombre));
         for (int k = 1; k <= 9; k++) sb.append(String.format(" k%d=%d", k, c.getOrDefault(k, 0)));
         System.out.println(sb);
@@ -28,7 +28,7 @@ public final class Analisis {
      * Firma de updown: P(que una racha de bajadas continúe | ya lleva k).
      * En azar natural crece: ~0.36, 0.25, 0.19, 0.16... (sube a 0.5->0.88 la de romper).
      */
-    public static void firmaUpdown(int[] d) {
+    public void firmaUpdown(int[] d) {
         Boolean[] ud = Rachas.serieUpdown(d);
         // contar longitudes de rachas de BAJADA
         int[] cont = new int[12];
@@ -52,7 +52,7 @@ public final class Analisis {
     }
 
     /** Convergencia de la proporción de rojo al 50% (ley 1/sqrt(n)). */
-    public static void convergenciaGris(int[] d) {
+    public void convergenciaGris(int[] d) {
         int reds = 0, resolved = 0;
         int[] cps = {100, 500, 1000, 5000, 10000, 50000, 100000, 500000, d.length};
         Set<Integer> set = new TreeSet<>();

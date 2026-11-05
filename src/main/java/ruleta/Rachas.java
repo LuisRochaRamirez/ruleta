@@ -17,10 +17,10 @@ public final class Rachas {
     public record Racha(Boolean valor, int longitud, int inicio, int fin) {}
     public record RachaAlt(boolean iniciaArriba, int longitud, int inicio, int fin) {}
 
-    private Rachas() {}
+    public Rachas() {}
 
     /** Serie binaria de una dimensión (usa Boolean[]; null = no participa). */
-    public static Boolean[] serie(int[] datos, IntFunction<Boolean> dim) {
+    public Boolean[] serie(int[] datos, IntFunction<Boolean> dim) {
         Boolean[] s = new Boolean[datos.length];
         for (int i = 0; i < datos.length; i++) s[i] = dim.apply(datos[i]);
         return s;
@@ -29,14 +29,14 @@ public final class Rachas {
     /** Serie de una dimensión TERNARIA (dozen/column), convertida a Boolean por
      *  valor no sirve; para rachas usamos igualdad de entero. Se codifica como
      *  Boolean[] no es adecuado -> se ofrece variante Integer. */
-    public static Boolean[] serieInt(int[] datos, IntFunction<Integer> dim) {
+    public Boolean[] serieInt(int[] datos, IntFunction<Integer> dim) {
         // Para reutilizar rachas(Boolean[]) con ternarias, comparamos igualdad
         // mediante un truco: no es binario, así que generamos rachas aparte.
         throw new UnsupportedOperationException("usar rachasTernaria");
     }
 
     /** Rachas sobre una dimensión ternaria (null=cero rompe). */
-    public static List<Racha> rachasTernaria(int[] datos, IntFunction<Integer> dim) {
+    public List<Racha> rachasTernaria(int[] datos, IntFunction<Integer> dim) {
         List<Racha> out = new ArrayList<>();
         int i = 0, n = datos.length;
         while (i < n) {
@@ -51,7 +51,7 @@ public final class Rachas {
     }
 
     /** Serie updown (requiere el número anterior). */
-    public static Boolean[] serieUpdown(int[] datos) {
+    public Boolean[] serieUpdown(int[] datos) {
         Boolean[] s = new Boolean[datos.length];
         Integer prev = null;
         for (int i = 0; i < datos.length; i++) { s[i] = Ruleta.updown(datos[i], prev); prev = datos[i]; }
@@ -59,7 +59,7 @@ public final class Rachas {
     }
 
     /** Extrae todas las rachas de una serie binaria (null rompe). */
-    public static List<Racha> rachas(Boolean[] s) {
+    public List<Racha> rachas(Boolean[] s) {
         List<Racha> out = new ArrayList<>();
         int i = 0, n = s.length;
         while (i < n) {
@@ -74,14 +74,14 @@ public final class Rachas {
     }
 
     /** Conteo de rachas por longitud. */
-    public static Map<Integer,Integer> conteoPorNivel(List<Racha> rachas) {
+    public Map<Integer,Integer> conteoPorNivel(List<Racha> rachas) {
         Map<Integer,Integer> m = new TreeMap<>();
         for (Racha r : rachas) m.merge(r.longitud(), 1, Integer::sum);
         return m;
     }
 
     /** Rachas de ALTERNANCIA sobre la serie updown RESUELTA (sin null). */
-    public static List<RachaAlt> rachasAlternancia(Boolean[] updownSerie) {
+    public List<RachaAlt> rachasAlternancia(Boolean[] updownSerie) {
         List<Boolean> res = new ArrayList<>();
         for (Boolean v : updownSerie) if (v != null) res.add(v);
         List<RachaAlt> out = new ArrayList<>();
