@@ -66,7 +66,9 @@ public final class Datos {
 
             Random random = new Random(seed);
 
-            var valores = random.ints(cantidad).
+            // acotar a 0..36 (ruleta europea). ANTES: random.ints(cantidad) daba
+            // enteros en todo el rango int -> ningún valor coincidía.
+            var valores = random.ints(cantidad, 0, 37).
                     mapToObj(n -> Arrays.stream(Valor.values())
                             .filter(v -> v.valor == n)
                             .findFirst()

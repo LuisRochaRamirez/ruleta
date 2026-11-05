@@ -1,3 +1,5 @@
 build/
+base_1m.csv
 base_1M.csv
 *.class
+out/

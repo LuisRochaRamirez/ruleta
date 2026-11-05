@@ -14,7 +14,7 @@ import java.util.*;
  */
 public class App {
 
-    public void main(String[] args) throws IOException {
+    public static void main(String[] args) throws IOException {
         System.out.println("=== Simulador y análisis de ruleta europea ===");
 
         Ruleta ruleta = new Ruleta();
