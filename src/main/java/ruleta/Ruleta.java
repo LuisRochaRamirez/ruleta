@@ -190,16 +190,38 @@ public final class Ruleta {
         boolean iniciaRacha2Rojo = (resultadoActual.color == Atributo.ROJO);
         if (iniciaRacha2Rojo) {
 
-            if (rachas1RojoOcurridas < rachas1RojoEsperadas) {//quiza poner un criterio conservador de una variacion esperada segun las mediciones, quiza de un 3%
-                //espero que sea racha de 1, es decir los valores del tablero que rompen la racha suman un calor de 0.5 * rachas1RojoEsperadas - rachas1RojoOcurridas
+            // cuántos rojos seguidos llevo (R = 1, RR = 2, ...). Una racha solo puede
+            // TERMINAR en el nivel en que está ahora: en RR ya no puede ser "racha de 1".
+            int largoActual = largoRachaActual(Dimension.COLOR, i, juego);
+
+            if (largoActual == 1 && rachas1RojoOcurridas < rachas1RojoEsperadas) {//quiza poner un criterio conservador de una variacion esperada segun las mediciones, quiza de un 3%
+                //espero que sea racha de 1, es decir los valores del tablero que rompen la racha suman un calor de 0.5 * (rachas1RojoEsperadas - rachas1RojoOcurridas)
+                // (leído como 0.5 * faltantes; "0.5*E - O" sería negativo casi siempre)
+                double calor = 0.5 * (rachas1RojoEsperadas - rachas1RojoOcurridas);
+                sumarCalorColor(Atributo.NEGRO, calor);   // CADA negro recibe 'calor' completo (no se reparte)
             }
 
-            //Si el resulatdo es R o RR y ademas hay una deficiencia conservadora de rachas de 2 rojo
-            boolean esRR = (i > 0 && juego[i - 1].color == Atributo.ROJO);
-            if (iniciaRacha2Rojo && rachas2RojoOcurridas < rachas2RojoEsperadas) {//quiza poner un criterio conservador de una variacion esperada segun las mediciones, quiza de un 5%
+            //Si el resulatdo es RR y ademas hay una deficiencia conservadora de rachas de 2 rojo
+            if (largoActual == 2 && rachas2RojoOcurridas < rachas2RojoEsperadas) {//quiza poner un criterio conservador de una variacion esperada segun las mediciones, quiza de un 5%
                 //espero una racha de 2, es decir los valores del tablero que rompen la racha suman un valor de 0.5*0.5 * cada giro faltante para equiparar las rachas de 2 con sus esperadas
-
+                double calor = 0.5 * 0.5 * (rachas2RojoEsperadas - rachas2RojoOcurridas);
+                sumarCalorColor(Atributo.NEGRO, calor);
             }
+
+            // PENDIENTE (pregunta 2): ¿una deuda del nivel siguiente empuja a PROLONGAR?
+            // p.ej. en R (largo 1) con faltantes de rachas de 2 -> calor a los ROJOS.
+        }
+        // PENDIENTE: ¿y cuando el resultado actual es NEGRO? (racha negra / ruptura de rojos)
+    }
+
+    /**
+     * Suma 'calor' a calorColor de CADA valor del tablero cuyo color es 'colorBuscado'
+     * (Atributo.ROJO / NEGRO). Supuesto: este calor va a calorColor (pregunta 3).
+     */
+    private void sumarCalorColor(int colorBuscado, double calor) {
+        BigDecimal c = BigDecimal.valueOf(calor);
+        for (Valor v : tablero) {
+            if (v.color == colorBuscado) v.calorColor = v.calorColor.add(c);
         }
     }
 }
