@@ -34,6 +34,14 @@ public final class Ruleta {
         System.out.println("cargada muestra nueva de: " + cantidad + " registros");
     }
 
+    /** Cuántos números (los más calientes) se apuestan a pleno cada giro. */
+    public static final int TOP_APUESTA = 9;
+
+    /** Prueba la apuesta con TOP_APUESTA números por giro. */
+    public BigDecimal probarApuesta(int desde, int hasta) {
+        return probarApuesta(desde, hasta, TOP_APUESTA);
+    }
+
     /**
      * Prueba un esquema de apuesta recorriendo el 'juego' y devuelve el retorno
      * acumulado (beneficio neto). Por ahora esqueleto: recorre, reparte el calor
@@ -41,10 +49,13 @@ public final class Ruleta {
      *
      * @param desde índice inicial del juego (inclusive)
      * @param hasta índice final (exclusive)
+     * @param top   cuántos números (los más calientes) se apuestan a pleno cada giro
+     *
+     * Cada giro cuesta 'top' fichas. Acierto: +(36 - top). Fallo (incluido el cero): -top.
+     * Por eso retorno = 36 * aciertos - top * apuestas.
      */
-    public BigDecimal probarApuesta(int desde, int hasta) {
+    public BigDecimal probarApuesta(int desde, int hasta, int top) {
         BigDecimal retorno = BigDecimal.ZERO;
-        final int TOP = 18;                 // nº de plenos a cubrir por giro
         final BigDecimal PAGO = BigDecimal.valueOf(35);
 
         for (int i = Math.max(desde, 1); i < Math.min(hasta, juego.length); i++) {
@@ -52,19 +63,19 @@ public final class Ruleta {
             limpiarCalor();
             calculaCalor(i - 1);
 
-            // 2) elegir los TOP más calientes (excluyendo el 0)
+            // 2) elegir los 'top' más calientes (excluyendo el 0)
             Valor[] calientes = Arrays.stream(tablero)
                     .filter(v -> v.valor != 0)
                     .sorted((a, b) -> b.calorTotal().compareTo(a.calorTotal()))
-                    .limit(TOP)
+                    .limit(top)
                     .toArray(Valor[]::new);
 
             // 3) apostar 1 a cada uno; el resultado real es juego[i]
             Valor salio = juego[i];
             boolean acierto = Arrays.asList(calientes).contains(salio);
             retorno = acierto
-                    ? retorno.add(PAGO.subtract(BigDecimal.valueOf(TOP - 1))) // +35 del acertado, -1 por cada otro
-                    : retorno.subtract(BigDecimal.valueOf(TOP));
+                    ? retorno.add(PAGO.subtract(BigDecimal.valueOf(top - 1))) // +35 del acertado, -1 por cada otro pleno
+                    : retorno.subtract(BigDecimal.valueOf(top));
         }
         return retorno;
     }
