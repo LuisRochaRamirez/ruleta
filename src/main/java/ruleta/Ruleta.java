@@ -24,6 +24,9 @@ public final class Ruleta {
     /** Niveles de racha que se contabilizan (1..NIVEL_MAX). */
     private static final int NIVEL_MAX = 8;
 
+    /** El último nivel (NIVEL_MAX) es acumulado: "NIVEL_MAX o más". Se suma la cola hasta este largo (el resto es despreciable). */
+    private static final int NIVEL_TOPE_ACUMULADO = 80;
+
     public void cargarReal(String path) throws IOException {
         juego = Datos.leerValores(path);
         System.out.println("cargada muestra real limpia: " + juego.length + " registros");
@@ -136,6 +139,25 @@ public final class Ruleta {
     }
 
     /**
+     * Igual que contarRachas, pero el ÚLTIMO nivel (maxNivel) es ACUMULADO: cuenta las rachas de maxNivel
+     * elementos o MÁS (la "8+"). Es el que usa el algoritmo de calor.
+     */
+    public int[] contarRachasConAcumulado(Dimension dim, int lado, int i, Valor[] juego, int maxNivel) {
+        int[] cuenta = new int[maxNivel + 1];
+        int ultimo = Math.min(i, juego.length - 1);
+        int largo = 0;
+        for (int j = 0; j <= ultimo; j++) {
+            if (dim.de(juego[j]) == lado) {
+                largo++;
+            } else {
+                if (largo >= 1) cuenta[Math.min(largo, maxNivel)]++;   // se cerró una racha
+                largo = 0;
+            }
+        }
+        return cuenta;
+    }
+
+    /**
      * Longitud de la racha ABIERTA que termina en la posición i: cuántos elementos
      * seguidos, hacia atrás desde i, comparten el atributo de juego[i] en 'dim'.
      * Devuelve 0 si juego[i] no tiene atributo en esa dimensión (el cero).
@@ -218,12 +240,12 @@ public final class Ruleta {
         if (dim.de(juego[i]) != lado) return;
 
         double pLado = probLado(dim, lado);
-        int[] ocurridas = contarRachas(dim, lado, i, juego, NIVEL_MAX);
+        int[] ocurridas = contarRachasConAcumulado(dim, lado, i, juego, NIVEL_MAX);
         double[] esperadas = esperadasPorNivel(i + 1, pLado);   // n = datos leídos hasta i (no el futuro)
 
         // Al romper se abre una racha del lado contrario: sus rachas de nivel 1 también cuentan.
         int ladoContrario = -lado;
-        int[] ocurridasContrario = contarRachas(dim, ladoContrario, i, juego, NIVEL_MAX);
+        int[] ocurridasContrario = contarRachasConAcumulado(dim, ladoContrario, i, juego, NIVEL_MAX);
         double[] esperadasContrario = esperadasPorNivel(i + 1, probLado(dim, ladoContrario));
 
         repartirCalor(dim, lado, i, pLado, ocurridas, esperadas, ocurridasContrario[1], esperadasContrario[1]);
@@ -242,8 +264,8 @@ public final class Ruleta {
         int lado = dim.de(juego[i]);
         if (lado == 0) return;
 
-        int[] ocMas = contarRachas(dim, 1, i, juego, NIVEL_MAX);
-        int[] ocMenos = contarRachas(dim, -1, i, juego, NIVEL_MAX);
+        int[] ocMas = contarRachasConAcumulado(dim, 1, i, juego, NIVEL_MAX);
+        int[] ocMenos = contarRachasConAcumulado(dim, -1, i, juego, NIVEL_MAX);
         double[] esMas = esperadasPorNivel(i + 1, probLado(dim, 1));
         double[] esMenos = esperadasPorNivel(i + 1, probLado(dim, -1));
 
@@ -257,6 +279,11 @@ public final class Ruleta {
         repartirCalor(dim, lado, i, probLado(dim, lado), ocurridas, esperadas, ocurridas[1], esperadas[1]);
     }
 
+    /** Solo para pruebas: esperadas por nivel (el último acumulado) de un lado de una dimensión. */
+    public double[] esperadasRachasParaPrueba(double n, Dimension dim, int lado) {
+        return esperadasPorNivel(n, probLado(dim, lado));
+    }
+
     /**
      * Rachas esperadas de EXACTAMENTE k elementos (k = 1..NIVEL_MAX) de un lado con probabilidad pLado,
      * entre n giros. Una racha de 1 es [no lado][lado][no lado]; cada nivel es pLado veces el anterior.
@@ -265,6 +292,12 @@ public final class Ruleta {
         double[] esperadas = new double[NIVEL_MAX + 1];
         esperadas[1] = n * (1 - pLado) * pLado * (1 - pLado);
         for (int k = 2; k <= NIVEL_MAX; k++) esperadas[k] = esperadas[k - 1] * pLado;
+        // el último nivel es ACUMULADO (NIVEL_MAX o más): suma de los niveles NIVEL_MAX, NIVEL_MAX+1, ...
+        double nivelSiguiente = esperadas[NIVEL_MAX];
+        for (int k = NIVEL_MAX + 1; k <= NIVEL_TOPE_ACUMULADO; k++) {
+            nivelSiguiente *= pLado;
+            esperadas[NIVEL_MAX] += nivelSiguiente;
+        }
         return esperadas;
     }
 
@@ -276,10 +309,12 @@ public final class Ruleta {
                                int ocurridasNivel1QueSeAbre, double esperadasNivel1QueSeAbre) {
         int largoActual = largoRachaActual(dim, i, juego);
 
-        // ROMPER -> valores del lado contrario (la racha se cierra con exactamente L)
-        if (largoActual <= NIVEL_MAX) {
-            double diferencia = diferenciaDeRachas(esperadas[largoActual], ocurridas[largoActual]);
-            sumarCalor(dim, -lado, probRachaTermina(largoActual, pLado) * diferencia);
+        // ROMPER -> valores del lado contrario. Si L < NIVEL_MAX la racha se cierra con exactamente L;
+        // si L >= NIVEL_MAX se cierra dentro del nivel acumulado "NIVEL_MAX o más".
+        if (largoActual >= 1) {
+            int nivelQueCierra = Math.min(largoActual, NIVEL_MAX);
+            double diferencia = diferenciaDeRachas(esperadas[nivelQueCierra], ocurridas[nivelQueCierra]);
+            sumarCalor(dim, -lado, pesoDelNivel(nivelQueCierra, largoActual, pLado) * diferencia);
         }
 
         // ROMPER, además: la ruptura abre una racha del lado contrario, y lo más probable es que termine en
@@ -291,7 +326,7 @@ public final class Ruleta {
         int siguiente = largoActual + 1;
         if (siguiente <= NIVEL_MAX) {
             double diferencia = diferenciaDeRachas(esperadas[siguiente], ocurridas[siguiente]);
-            sumarCalor(dim, lado, probRachaTermina(siguiente, pLado) * diferencia);
+            sumarCalor(dim, lado, pesoDelNivel(siguiente, siguiente, pLado) * diferencia);
         }
     }
 
@@ -393,8 +428,8 @@ public final class Ruleta {
         int largoContado = primeroExcluido ? largo - 1 : largo;
         int ladoContado = primeroExcluido ? -inicio : inicio;
         boolean ladoCoincide = (ladoInicioBuscado == 0) || (ladoContado == ladoInicioBuscado);
-        if (largoContado >= 2 && largoContado <= maxNivel && ladoCoincide) {
-            cuenta[largoContado]++;
+        if (largoContado >= 2 && ladoCoincide) {
+            cuenta[Math.min(largoContado, maxNivel)]++;      // el último nivel es acumulado (maxNivel o más)
         }
     }
 
@@ -443,6 +478,14 @@ public final class Ruleta {
                 esperadas[nivel] = esperadaZigzagContado(dim, ladoInicio, nivel, n);
             }
         }
+        // el último nivel es ACUMULADO (NIVEL_MAX o más)
+        for (int nivel = NIVEL_MAX + 1; nivel <= NIVEL_TOPE_ACUMULADO; nivel++) {
+            if (ladoInicio == 0) {
+                esperadas[NIVEL_MAX] += esperadaZigzagContado(dim, 1, nivel, n) + esperadaZigzagContado(dim, -1, nivel, n);
+            } else {
+                esperadas[NIVEL_MAX] += esperadaZigzagContado(dim, ladoInicio, nivel, n);
+            }
+        }
         return esperadas;
     }
 
@@ -480,16 +523,17 @@ public final class Ruleta {
         double pAlterna = probLado(dim, -estado.ultimo());    // probabilidad de que el siguiente alterne
 
         // ROMPER: el siguiente repite el último símbolo (o es el cero) -> el zigzag se cierra con exactamente 'largo'
-        if (largo <= NIVEL_MAX) {
-            double diferencia = diferenciaDeRachas(esperadas[largo], ocurridas[largo]);
-            sumarCalorAlterno(dim, estado.ultimo(), probRachaTermina(largo, pAlterna) * diferencia);
+        if (largo >= 2) {                                      // el nivel 1 no existe en la alternancia
+            int nivelQueCierra = Math.min(largo, NIVEL_MAX);
+            double diferencia = diferenciaDeRachas(esperadas[nivelQueCierra], ocurridas[nivelQueCierra]);
+            sumarCalorAlterno(dim, estado.ultimo(), pesoDelNivel(nivelQueCierra, largo, pAlterna) * diferencia);
         }
 
         // PROLONGAR: el siguiente alterna (el opuesto) -> el zigzag llegará al menos a largo+1
         int siguiente = largo + 1;
         if (siguiente <= NIVEL_MAX) {
             double diferencia = diferenciaDeRachas(esperadas[siguiente], ocurridas[siguiente]);
-            sumarCalorAlterno(dim, -estado.ultimo(), probRachaTermina(siguiente, pAlterna) * diferencia);
+            sumarCalorAlterno(dim, -estado.ultimo(), pesoDelNivel(siguiente, siguiente, pAlterna) * diferencia);
         }
     }
 
@@ -534,6 +578,15 @@ public final class Ruleta {
      */
     private double probRachaTermina(int k, double pLado) {
         return (1 - pLado) * Math.pow(pLado, k - 1);
+    }
+
+    /**
+     * Peso de un nivel en el reparto. Niveles normales: probRachaTermina(largo). Nivel acumulado (NIVEL_MAX o más):
+     * la probabilidad de llegar a NIVEL_MAX elementos, pLado^(NIVEL_MAX-1).
+     */
+    private double pesoDelNivel(int nivel, int largo, double pLado) {
+        if (nivel >= NIVEL_MAX) return Math.pow(pLado, NIVEL_MAX - 1);
+        return probRachaTermina(largo, pLado);
     }
 
     /** esperadas - ocurridas con signo; 0 si están dentro de la zona de "igual". */
