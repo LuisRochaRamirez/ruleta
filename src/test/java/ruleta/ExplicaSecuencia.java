@@ -85,7 +85,7 @@ public class ExplicaSecuencia {
         if (dimension != Dimension.FRANJA) {
             Ruleta.EstadoAlternancia estado = ruleta.estadoAlternancia(dimension, posicionUltimo, ruleta.juego);
             if (estado.largo() == 0) {
-                System.out.println("  (alternancia: no hay zigzag en curso)");
+                System.out.println("  (alternancia: sin zigzag contado en curso: el último número cerró una racha o es el cero)");
             } else {
                 String inicio = (estado.ladoInicio() == 1) ? ladoMas : ladoMenos;
                 String ultimo = (estado.ultimo() == 1) ? ladoMas : ladoMenos;

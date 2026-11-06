@@ -220,7 +220,13 @@ public final class Ruleta {
         double pLado = probLado(dim, lado);
         int[] ocurridas = contarRachas(dim, lado, i, juego, NIVEL_MAX);
         double[] esperadas = esperadasPorNivel(i + 1, pLado);   // n = datos leídos hasta i (no el futuro)
-        repartirCalor(dim, lado, i, pLado, ocurridas, esperadas);
+
+        // Al romper se abre una racha del lado contrario: sus rachas de nivel 1 también cuentan.
+        int ladoContrario = -lado;
+        int[] ocurridasContrario = contarRachas(dim, ladoContrario, i, juego, NIVEL_MAX);
+        double[] esperadasContrario = esperadasPorNivel(i + 1, probLado(dim, ladoContrario));
+
+        repartirCalor(dim, lado, i, pLado, ocurridas, esperadas, ocurridasContrario[1], esperadasContrario[1]);
     }
 
     /**
@@ -247,7 +253,8 @@ public final class Ruleta {
             ocurridas[k] = ocMas[k] + ocMenos[k];
             esperadas[k] = esMas[k] + esMenos[k];
         }
-        repartirCalor(dim, lado, i, probLado(dim, lado), ocurridas, esperadas);
+        // el nivel 1 que se abre al romper, medido también en el total de la dimensión
+        repartirCalor(dim, lado, i, probLado(dim, lado), ocurridas, esperadas, ocurridas[1], esperadas[1]);
     }
 
     /**
@@ -265,7 +272,8 @@ public final class Ruleta {
      * Reparte el calor de la racha ACTUAL (del lado 'lado', largo L) a partir de lo ocurrido y lo
      * esperado por nivel (por lado o de la dimensión completa; el reparto es el mismo).
      */
-    private void repartirCalor(Dimension dim, int lado, int i, double pLado, int[] ocurridas, double[] esperadas) {
+    private void repartirCalor(Dimension dim, int lado, int i, double pLado, int[] ocurridas, double[] esperadas,
+                               int ocurridasNivel1QueSeAbre, double esperadasNivel1QueSeAbre) {
         int largoActual = largoRachaActual(dim, i, juego);
 
         // ROMPER -> valores del lado contrario (la racha se cierra con exactamente L)
@@ -273,6 +281,11 @@ public final class Ruleta {
             double diferencia = diferenciaDeRachas(esperadas[largoActual], ocurridas[largoActual]);
             sumarCalor(dim, -lado, probRachaTermina(largoActual, pLado) * diferencia);
         }
+
+        // ROMPER, además: la ruptura abre una racha del lado contrario, y lo más probable es que termine en
+        // el nivel 1. Si faltan rachas de nivel 1 de ese lado, suma calor a ese lado; si sobran, resta.
+        double diferenciaNivel1 = diferenciaDeRachas(esperadasNivel1QueSeAbre, ocurridasNivel1QueSeAbre);
+        sumarCalor(dim, -lado, probRachaTermina(1, probLado(dim, -lado)) * diferenciaNivel1);
 
         // PROLONGAR -> valores del mismo lado (la racha llegará al menos a L+1)
         int siguiente = largoActual + 1;
@@ -286,78 +299,106 @@ public final class Ruleta {
     //  ALTERNANCIA (dimensión propia; su calor va a calor<Dim>Alterno)
     // ------------------------------------------------------------------
     //
-    // Una racha de alternancia es un tramo de ZIGZAG (símbolos consecutivos de lados distintos). Su "lado"
-    // es el símbolo con que INICIÓ. El CERO ROMPE el zigzag (lo cierra y no abre otro), igual que rompe las
-    // rachas. Cuando un símbolo repite al anterior se cierra el zigzag y el repetido abre el siguiente
-    // (bordes compartidos). Los zigzags de 1 símbolo no existen: el nivel mínimo es 2.
+    // Una racha de alternancia es un tramo de ZIGZAG (símbolos consecutivos de lados distintos).
+    //  - El CERO ROMPE el zigzag (lo cierra y no abre otro), igual que rompe las rachas.
+    //  - Cuando un símbolo repite al anterior se cierra el zigzag en curso. Ese símbolo repetido es el
+    //    NÚMERO FIN DE RACHA (cierra una racha directa) y la alternancia NO LO CONTEMPLA: abre el zigzag
+    //    siguiente pero no forma parte de él. Por eso el cambio aislado entre dos rachas (el P->I de PPII)
+    //    no es una alternancia.
+    //  - Si al zigzag lo precede un cero, o es el inicio de la muestra, su primer símbolo SÍ cuenta
+    //    (no cierra ninguna racha).
+    //  - El "lado" de un zigzag es el de su primer símbolo contado. El nivel mínimo es 2.
     //
-    // Esperadas en n giros (cero incluido). Un zigzag de EXACTAMENTE k símbolos que inicia en el lado s es
-    //     [antes: cero o s] [k símbolos alternando s, s', s, ...] [después: cero o el último símbolo]
-    // y con p = probabilidad de un lado (18/37) y q = 1 - p (19/37):
-    //     por lado de inicio : n * q * p^k * q            total (dos lados) : 2 * n * q^2 * p^k
-    // (misma forma que las rachas directas, pero desde k = 2).
+    // Esperadas en n giros (cero incluido). p = probabilidad de un lado (18/37), q = 1 - p, z = prob. del cero.
+    // Un zigzag contado de m símbolos que empieza en el lado t viene de:
+    //   (a) detrás de una repetición: un zigzag completo de m+1 símbolos que empieza en el lado contrario
+    //       (-t) y lo precede un símbolo igual -> n * p_(-t) * [m+1 símbolos alternando] * q
+    //   (b) detrás de un cero:  zigzag de m símbolos que empieza en t  -> n * z * [m símbolos alternando] * q
     //
-    // Reparto del calor, con el zigzag en curso de largo L y último símbolo u:
+    // Reparto del calor, con el zigzag contado en curso de largo L y último símbolo u:
     //     ROMPER    (el siguiente repite u, o es el cero) -> valores con atributo  u , cuenta el nivel L
     //     PROLONGAR (el siguiente alterna: -u)            -> valores con atributo -u , cuenta el nivel L+1
     //     peso = P(el zigzag termina en k) = q * p^(k-1), con p = probabilidad de alternar; y la
     //     diferencia (esperadas - ocurridas) con signo, igual que en las rachas.
+    // Si el último número acaba de cerrar una racha, todavía no hay zigzag contado (largo 0): no hay calor.
     // El cero no recibe calor (por ahora no participa), aunque sí rompe.
 
-    /** Zigzag en curso: lado con que inició, cuántos símbolos lleva y cuál fue el último (0 si no hay). */
+    /** Zigzag contado en curso: lado de su primer símbolo contado, cuántos símbolos lleva y el último (largo 0 si no hay). */
     public record EstadoAlternancia(int ladoInicio, int largo, int ultimo) {}
 
-    /** Estado del zigzag en curso al llegar a la posición i. Tras un cero no hay zigzag en curso (largo 0). */
+    /** Estado del zigzag contado en curso al llegar a la posición i. */
     public EstadoAlternancia estadoAlternancia(Dimension dim, int i, Valor[] juego) {
         int ladoInicio = 0, largo = 0, ultimo = 0;
+        boolean primeroExcluido = false;
         for (int j = 0; j <= Math.min(i, juego.length - 1); j++) {
-            int s = dim.de(juego[j]);
-            if (s == 0) {                                  // el cero ROMPE: no hay zigzag en curso
+            int simbolo = dim.de(juego[j]);
+            if (simbolo == 0) {                            // el cero ROMPE: no hay zigzag en curso
                 ladoInicio = 0;
                 largo = 0;
                 ultimo = 0;
+                primeroExcluido = false;
                 continue;
             }
-            if (largo > 0 && s != ultimo) {
+            if (largo > 0 && simbolo != ultimo) {
                 largo++;                                   // alterna: el zigzag crece
             } else {
-                ladoInicio = s;                            // primer símbolo, o repetición: abre un zigzag nuevo
+                primeroExcluido = (largo > 0 && simbolo == ultimo);   // repite: este símbolo es un FIN DE RACHA
+                ladoInicio = simbolo;
                 largo = 1;
             }
-            ultimo = s;
+            ultimo = simbolo;
         }
-        return new EstadoAlternancia(ladoInicio, largo, ultimo);
+        int largoContado = primeroExcluido ? largo - 1 : largo;
+        int ladoContado = primeroExcluido ? -ladoInicio : ladoInicio;
+        if (largoContado <= 0) {
+            return new EstadoAlternancia(0, 0, ultimo);
+        }
+        return new EstadoAlternancia(ladoContado, largoContado, ultimo);
     }
 
     /**
-     * Zigzags CERRADOS de exactamente k símbolos (k = 2..maxNivel) hasta la posición i, que iniciaron con
-     * 'ladoInicio' (+1 / -1), o de ambos lados si ladoInicio == 0. El zigzag en curso no se cuenta.
-     * Cierran un zigzag: una repetición, el cero, o el primer símbolo.
+     * Zigzags CERRADOS de exactamente k símbolos contados (k = 2..maxNivel) hasta la posición i, cuyo primer
+     * símbolo contado es de 'ladoInicio' (+1 / -1), o de ambos lados si ladoInicio == 0. El zigzag en curso
+     * no se cuenta. Cierran un zigzag: una repetición, el cero, o el primer símbolo.
      */
     public int[] contarAlternancias(Dimension dim, int ladoInicio, int i, Valor[] juego, int maxNivel) {
         int[] cuenta = new int[maxNivel + 1];
         int inicio = 0, largo = 0, ultimo = 0;
+        boolean primeroExcluido = false;
         for (int j = 0; j <= Math.min(i, juego.length - 1); j++) {
-            int s = dim.de(juego[j]);
-            if (s == 0 || largo == 0 || s == ultimo) {
-                if (largo >= 2 && largo <= maxNivel && (ladoInicio == 0 || inicio == ladoInicio)) cuenta[largo]++;
-                if (s == 0) {                              // el cero cierra y NO abre otro
+            int simbolo = dim.de(juego[j]);
+            if (simbolo == 0 || largo == 0 || simbolo == ultimo) {
+                contarZigzagCerrado(cuenta, ladoInicio, inicio, largo, primeroExcluido, maxNivel);
+                if (simbolo == 0) {                        // el cero cierra y NO abre otro
                     inicio = 0;
                     largo = 0;
                     ultimo = 0;
+                    primeroExcluido = false;
                     continue;
                 }
-                inicio = s;
+                primeroExcluido = (largo > 0 && simbolo == ultimo);   // repite: este símbolo es un FIN DE RACHA
+                inicio = simbolo;
                 largo = 1;
             } else {
                 largo++;
             }
-            ultimo = s;
+            ultimo = simbolo;
         }
         return cuenta;
     }
 
-    /** Calor por la alternancia en curso, solo si el zigzag actual INICIÓ en 'ladoInicio'. */
+    /** Suma un zigzag cerrado a la cuenta, quitándole su primer símbolo si era un fin de racha. */
+    private void contarZigzagCerrado(int[] cuenta, int ladoInicioBuscado, int inicio, int largo,
+                                     boolean primeroExcluido, int maxNivel) {
+        int largoContado = primeroExcluido ? largo - 1 : largo;
+        int ladoContado = primeroExcluido ? -inicio : inicio;
+        boolean ladoCoincide = (ladoInicioBuscado == 0) || (ladoContado == ladoInicioBuscado);
+        if (largoContado >= 2 && largoContado <= maxNivel && ladoCoincide) {
+            cuenta[largoContado]++;
+        }
+    }
+
+    /** Calor por la alternancia en curso, solo si el zigzag contado actual empezó en 'ladoInicio'. */
     public void calorAlternancia(Dimension dim, int ladoInicio, int i) {
         if (dim == Dimension.FRANJA) return;               // la franja no tiene alternancia
         EstadoAlternancia estado = estadoAlternancia(dim, i, juego);
@@ -379,30 +420,46 @@ public final class Ruleta {
         repartirCalorAlternancia(dim, estado, ocurridas, esperadas);
     }
 
-    /** Zigzags esperados de exactamente k símbolos (k >= 2) en n giros; ladoInicio == 0 suma los dos lados. */
+    /** Zigzags contados esperados de exactamente k símbolos (k >= 2) en n giros; ladoInicio == 0 suma los dos lados. */
     private double[] esperadasAlternancia(Dimension dim, int ladoInicio, double n) {
         double[] esperadas = new double[NIVEL_MAX + 1];       // el nivel 1 no existe (queda en 0)
-        for (int k = 2; k <= NIVEL_MAX; k++) {
-            esperadas[k] = (ladoInicio == 0)
-                    ? esperadaZigzag(dim, 1, k, n) + esperadaZigzag(dim, -1, k, n)
-                    : esperadaZigzag(dim, ladoInicio, k, n);
+        for (int nivel = 2; nivel <= NIVEL_MAX; nivel++) {
+            if (ladoInicio == 0) {
+                esperadas[nivel] = esperadaZigzagContado(dim, 1, nivel, n) + esperadaZigzagContado(dim, -1, nivel, n);
+            } else {
+                esperadas[nivel] = esperadaZigzagContado(dim, ladoInicio, nivel, n);
+            }
         }
         return esperadas;
     }
 
     /**
-     * Zigzags esperados de k símbolos que inician en 'lado': [no es el opuesto de 'lado'] [k símbolos
-     * alternando] [no es el opuesto del último]. Con lados 18/18: n * q * p^k * q.
+     * Zigzags contados esperados de 'nivel' símbolos cuyo primer símbolo contado es de 'ladoPrimeroContado':
+     * los que vienen detrás de una repetición (con un símbolo más, el fin de racha) más los que vienen detrás de un cero.
      */
-    private double esperadaZigzag(Dimension dim, int lado, int k, double n) {
+    private double esperadaZigzagContado(Dimension dim, int ladoPrimeroContado, int nivel, double n) {
+        int ladoDelFinDeRacha = -ladoPrimeroContado;
+        double probabilidadDelCero = 1 - probLado(dim, 1) - probLado(dim, -1);
+        double detrasDeRepeticion = esperadaZigzagCompleto(dim, ladoDelFinDeRacha, nivel + 1, n,
+                probLado(dim, ladoDelFinDeRacha));
+        double detrasDeCero = esperadaZigzagCompleto(dim, ladoPrimeroContado, nivel, n, probabilidadDelCero);
+        return detrasDeRepeticion + detrasDeCero;
+    }
+
+    /**
+     * Zigzags completos de 'simbolos' símbolos que empiezan en 'ladoInicio': [lo que precede] [los símbolos
+     * alternando] [no es el opuesto del último]. 'probabilidadDeLoQuePrecede' es p (una repetición) o z (un cero).
+     */
+    private double esperadaZigzagCompleto(Dimension dim, int ladoInicio, int simbolos, double n,
+                                          double probabilidadDeLoQuePrecede) {
         double producto = 1;
-        int simbolo = lado;
-        for (int j = 0; j < k; j++) {
+        int simbolo = ladoInicio;
+        for (int posicion = 0; posicion < simbolos; posicion++) {
             producto *= probLado(dim, simbolo);
             simbolo = -simbolo;
         }
-        int ultimo = (k % 2 == 1) ? lado : -lado;
-        return n * (1 - probLado(dim, -lado)) * producto * (1 - probLado(dim, -ultimo));
+        int ultimo = (simbolos % 2 == 1) ? ladoInicio : -ladoInicio;
+        return n * probabilidadDeLoQuePrecede * producto * (1 - probLado(dim, -ultimo));
     }
 
     private void repartirCalorAlternancia(Dimension dim, EstadoAlternancia estado, int[] ocurridas, double[] esperadas) {
@@ -431,9 +488,9 @@ public final class Ruleta {
 
     /** Suma calor de alternancia a CADA valor cuyo atributo en 'dim' es 'atributoDestino'. */
     private void sumarCalorAlterno(Dimension dim, int atributoDestino, double calor) {
-        BigDecimal c = BigDecimal.valueOf(calor);
-        for (Valor v : tablero) {
-            if (dim.de(v) == atributoDestino) v.sumarCalorAlterno(dim, c);
+        BigDecimal calorASumar = BigDecimal.valueOf(calor);
+        for (Valor valor : tablero) {
+            if (dim.de(valor) == atributoDestino) valor.sumarCalorAlterno(dim, calorASumar);
         }
     }
 
