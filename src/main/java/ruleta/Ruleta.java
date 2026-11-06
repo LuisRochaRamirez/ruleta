@@ -167,6 +167,8 @@ public final class Ruleta {
         // Rachas de color: cada llamada actúa solo si el último resultado es de ese lado.
         calorRacha(Dimension.COLOR, Atributo.ROJO, i);
         calorRacha(Dimension.COLOR, Atributo.NEGRO, i);
+        // Color total: rojas + negras juntas (también cumplen la regla de la mitad por nivel)
+        calorRachaTotal(Dimension.COLOR, i);
 
         // PENDIENTE (en este orden): alternancia roja, alternancia negra, color total,
         // alternancia total, y después las demás dimensiones:
@@ -197,22 +199,63 @@ public final class Ruleta {
         if (dim.de(juego[i]) != lado) return;
 
         double pLado = probLado(dim, lado);
-        double n = i + 1;                                   // datos leídos hasta i (no el futuro)
-
         int[] ocurridas = contarRachas(dim, lado, i, juego, NIVEL_MAX);
+        double[] esperadas = esperadasPorNivel(i + 1, pLado);   // n = datos leídos hasta i (no el futuro)
+        repartirCalor(dim, lado, i, pLado, ocurridas, esperadas);
+    }
+
+    /**
+     * Igual que calorRacha, pero midiendo la dimensión COMPLETA ("color total"): las rachas de ambos
+     * lados juntas (rojas + negras). La regla de la mitad por nivel también se cumple en el total:
+     *     esperadas_total[k] = esperadas_lado+[k] + esperadas_lado-[k]     (= 2·n·q²·p^k si los lados son 18/18)
+     *     ocurridas_total[k] = ocurridas_lado+[k] + ocurridas_lado-[k]
+     * El calor se reparte igual que por lado: ROMPER al lado contrario del último resultado y
+     * PROLONGAR a su mismo lado, ponderado con la probabilidad de ESE lado.
+     * Actúa siempre que el último resultado tenga lado (no es el cero).
+     */
+    public void calorRachaTotal(Dimension dim, int i) {
+        int lado = dim.de(juego[i]);
+        if (lado == 0) return;
+
+        int[] ocMas = contarRachas(dim, 1, i, juego, NIVEL_MAX);
+        int[] ocMenos = contarRachas(dim, -1, i, juego, NIVEL_MAX);
+        double[] esMas = esperadasPorNivel(i + 1, probLado(dim, 1));
+        double[] esMenos = esperadasPorNivel(i + 1, probLado(dim, -1));
+
+        int[] ocurridas = new int[NIVEL_MAX + 1];
+        double[] esperadas = new double[NIVEL_MAX + 1];
+        for (int k = 1; k <= NIVEL_MAX; k++) {
+            ocurridas[k] = ocMas[k] + ocMenos[k];
+            esperadas[k] = esMas[k] + esMenos[k];
+        }
+        repartirCalor(dim, lado, i, probLado(dim, lado), ocurridas, esperadas);
+    }
+
+    /**
+     * Rachas esperadas de EXACTAMENTE k elementos (k = 1..NIVEL_MAX) de un lado con probabilidad pLado,
+     * entre n giros. Una racha de 1 es [no lado][lado][no lado]; cada nivel es pLado veces el anterior.
+     */
+    private double[] esperadasPorNivel(double n, double pLado) {
         double[] esperadas = new double[NIVEL_MAX + 1];
         esperadas[1] = n * (1 - pLado) * pLado * (1 - pLado);
         for (int k = 2; k <= NIVEL_MAX; k++) esperadas[k] = esperadas[k - 1] * pLado;
+        return esperadas;
+    }
 
+    /**
+     * Reparte el calor de la racha ACTUAL (del lado 'lado', largo L) a partir de lo ocurrido y lo
+     * esperado por nivel (por lado o de la dimensión completa; el reparto es el mismo).
+     */
+    private void repartirCalor(Dimension dim, int lado, int i, double pLado, int[] ocurridas, double[] esperadas) {
         int largoActual = largoRachaActual(dim, i, juego);
 
-        // ROMPER -> valores del lado contrario
+        // ROMPER -> valores del lado contrario (la racha se cierra con exactamente L)
         if (largoActual <= NIVEL_MAX) {
             double diferencia = diferenciaDeRachas(esperadas[largoActual], ocurridas[largoActual]);
             sumarCalor(dim, -lado, probRachaTermina(largoActual, pLado) * diferencia);
         }
 
-        // PROLONGAR -> valores del mismo lado
+        // PROLONGAR -> valores del mismo lado (la racha llegará al menos a L+1)
         int siguiente = largoActual + 1;
         if (siguiente <= NIVEL_MAX) {
             double diferencia = diferenciaDeRachas(esperadas[siguiente], ocurridas[siguiente]);
