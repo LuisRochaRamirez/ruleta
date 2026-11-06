@@ -134,6 +134,10 @@ public final class Ruleta {
      * parámetro i, así el calor en la posición i no depende del futuro.)
      */
     public void calculaCalor(int i) {
+        // el calor de cada número parte de CALOR_BASE = 1/37 (probabilidad de un pleno).
+        // Como todos parten igual, no cambia cuál es el más caliente: solo marca el "igual".
+        for (Valor v : tablero) v.calorColor = BigDecimal.valueOf(CALOR_BASE);
+
         // TODO: aqui va el algoritmo (asignar calor según rachas por dimension)
 
         /**
@@ -199,28 +203,46 @@ public final class Ruleta {
             double[] esperadas = {0, rachas1RojoEsperadas, rachas2RojoEsperadas, rachas3RojoEsperadas, rachas4RojoEsperadas,
                     rachas5RojoEsperadas, rachas6RojoEsperadas, rachas7RojoEsperadas, rachas8RojoEsperadas};
 
-            // criterio conservador (tu idea del 3% / 5%): exigir que falte MÁS de esta fracción de lo esperado.
-            // 0 = sin tolerancia. Ejemplo: 0.03 -> solo se activa si ocurridas < 97% de las esperadas.
-            final double TOLERANCIA = 0.0;
+            // Diferencia = esperadas - ocurridas, CON SIGNO:
+            //   faltan rachas  (ocurridas < esperadas)  -> diferencia > 0 -> SUMA calor
+            //   sobran rachas  (ocurridas > esperadas)  -> diferencia < 0 -> RESTA calor
+            //   iguales                                 -> diferencia = 0 -> el calor queda en CALOR_BASE (1/37)
+            // y vuelve a subir porque 'esperadas' crece con cada giro.
 
             // ROMPER (sale negro/cero): la racha se cierra con EXACTAMENTE 'largoActual' rojos,
-            // así que la ayudan los faltantes de ESE nivel.
-            if (largoActual <= 8 && ocurridas[largoActual] < esperadas[largoActual] * (1 - TOLERANCIA)) {
-                double faltantes = esperadas[largoActual] - ocurridas[largoActual];
+            // así que cuenta el nivel L.
+            if (largoActual <= 8) {
+                double diferencia = diferenciaDeRachas(esperadas[largoActual], ocurridas[largoActual]);
                 // CADA negro recibe el valor completo (no se reparte)
-                sumarCalorColor(Atributo.NEGRO, probRachaTermina(largoActual) * faltantes);
+                sumarCalorColor(Atributo.NEGRO, probRachaTermina(largoActual) * diferencia);
             }
 
-            // PROLONGAR (sale otro rojo): la racha llegará al menos a largoActual+1,
-            // así que la ayudan los faltantes del nivel SIGUIENTE (si falta una RR y estoy en R, el rojo suma).
+            // PROLONGAR (sale otro rojo): la racha llegará al menos a L+1, así que cuenta el nivel L+1.
             int siguiente = largoActual + 1;
-            if (siguiente <= 8 && ocurridas[siguiente] < esperadas[siguiente] * (1 - TOLERANCIA)) {
-                double faltantes = esperadas[siguiente] - ocurridas[siguiente];
+            if (siguiente <= 8) {
+                double diferencia = diferenciaDeRachas(esperadas[siguiente], ocurridas[siguiente]);
                 // CADA rojo recibe el valor completo
-                sumarCalorColor(Atributo.ROJO, probRachaTermina(siguiente) * faltantes);
+                sumarCalorColor(Atributo.ROJO, probRachaTermina(siguiente) * diferencia);
             }
         }
         // PENDIENTE: ¿y cuando el resultado actual es NEGRO? (racha negra / ruptura de rojos)
+    }
+
+    /** Calor inicial de cada número y al que vuelve cuando ocurridas == esperadas. */
+    private static final double CALOR_BASE = 1.0 / 37;
+
+    /**
+     * Zona de "igual": si |esperadas - ocurridas| <= TOLERANCIA * esperadas se considera igual
+     * (diferencia 0). Tu criterio conservador del 3% / 5% sería 0.03 / 0.05. Con 0.0 solo es
+     * "igual" cuando coinciden exactamente (con decimales casi nunca ocurre).
+     */
+    private static final double TOLERANCIA = 0.0;
+
+    /** esperadas - ocurridas con signo; 0 si están dentro de la zona de "igual". */
+    private double diferenciaDeRachas(double esperadas, int ocurridas) {
+        double d = esperadas - ocurridas;
+        if (Math.abs(d) <= TOLERANCIA * esperadas) return 0.0;
+        return d;
     }
 
     /**
