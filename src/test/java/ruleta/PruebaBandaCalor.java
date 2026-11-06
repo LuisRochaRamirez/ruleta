@@ -6,10 +6,10 @@ import java.util.Random;
  * Posición normalizada del calor = (calor - mínimo) / (máximo - mínimo), entre los 36 números del giro.
  * Mide (1) la posición media del resultado y su reparto por deciles frente al de todos los números,
  * (2) la apuesta a los números con posición entre BAJO y ALTO (1 ficha a cada uno).
- * Uso: real   |   azar secuencias largo semilla
+ * Uso: real [bajo alto]  |  azar secuencias largo semilla [bajo alto]
  */
 public class PruebaBandaCalor {
-    static final double BAJO = 0.25, ALTO = 0.75;
+    static double BAJO = 0.25, ALTO = 0.75;
 
     static double sumaPosicionResultado = 0;
     static long giros = 0, girosConResultado = 0;
@@ -20,6 +20,11 @@ public class PruebaBandaCalor {
 
     public static void main(String[] args) throws Exception {
         Ruleta ruleta = new Ruleta();
+        int posicionBanda = args[0].equals("real") ? 1 : 4;
+        if (args.length > posicionBanda + 1) {
+            BAJO = Double.parseDouble(args[posicionBanda]);
+            ALTO = Double.parseDouble(args[posicionBanda + 1]);
+        }
         if (args[0].equals("real")) {
             ruleta.cargarReal("real_465_clean.csv");
             procesar(ruleta);
