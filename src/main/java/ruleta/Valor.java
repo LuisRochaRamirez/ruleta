@@ -76,6 +76,19 @@ public enum Valor {
         }
     }
 
+    /**
+     * Suma calor al campo de ALTERNANCIA de la dimensión (calorColorAlterno, calorParidadAlterno,
+     * calorAltoBajoAlterno). La franja no tiene alternancia.
+     */
+    public void sumarCalorAlterno(Dimension dim, BigDecimal calor) {
+        switch (dim) {
+            case COLOR -> calorColorAlterno = calorColorAlterno.add(calor);
+            case PARIDAD -> calorParidadAlterno = calorParidadAlterno.add(calor);
+            case ALTOBAJO -> calorAltoBajoAlterno = calorAltoBajoAlterno.add(calor);
+            case FRANJA -> throw new UnsupportedOperationException("la franja no tiene alternancia");
+        }
+    }
+
     /** Pone en cero el calor de todas las dimensiones. */
     public void limpiarCalor() {
         calorColor = calorParidad = calorUpdown = calorFranja = calorAltoBajo = BigDecimal.ZERO;

@@ -170,6 +170,12 @@ public final class Ruleta {
         // Color total: rojas + negras juntas (también cumplen la regla de la mitad por nivel)
         calorRachaTotal(Dimension.COLOR, i);
 
+        // Alternancia del color: dimensión PROPIA, su calor va a calorColorAlterno (independiente del color).
+        fijarCalorBaseAlterno(Dimension.COLOR);
+        calorAlternancia(Dimension.COLOR, Atributo.ROJO, i);     // zigzag que INICIÓ en rojo
+        calorAlternancia(Dimension.COLOR, Atributo.NEGRO, i);    // zigzag que INICIÓ en negro
+        calorAlternanciaTotal(Dimension.COLOR, i);               // los dos juntos
+
         // PENDIENTE (en este orden): alternancia roja, alternancia negra, color total,
         // alternancia total, y después las demás dimensiones:
         //   calorRacha(Dimension.PARIDAD, Atributo.PAR, i);   calorRacha(Dimension.PARIDAD, Atributo.IMPAR, i);
@@ -260,6 +266,134 @@ public final class Ruleta {
         if (siguiente <= NIVEL_MAX) {
             double diferencia = diferenciaDeRachas(esperadas[siguiente], ocurridas[siguiente]);
             sumarCalor(dim, lado, probRachaTermina(siguiente, pLado) * diferencia);
+        }
+    }
+
+    // ------------------------------------------------------------------
+    //  ALTERNANCIA (dimensión propia; su calor va a calor<Dim>Alterno)
+    // ------------------------------------------------------------------
+    //
+    // Una racha de alternancia es un tramo de ZIGZAG (símbolos consecutivos distintos). Su "lado" es el
+    // símbolo con que INICIÓ. Se trabaja sobre los resultados RESUELTOS: el cero no participa, se salta.
+    // Cuando un símbolo repite al anterior se cierra el zigzag y el repetido abre el siguiente (bordes
+    // compartidos); los zigzags de 1 símbolo no existen (nivel mínimo 2).
+    //
+    // Esperadas (n = símbolos resueltos; cada símbolo repite con prob. 1/2): un zigzag de EXACTAMENTE k
+    // símbolos es [repite][k-1 alternancias][repite] -> prob. (1/2)^(k+1):
+    //     total       : n * 2^-(k+1)
+    //     por lado    : n * 2^-(k+2)
+    // Reparto del calor, con el zigzag en curso de largo L y último símbolo u:
+    //     ROMPER    (el siguiente repite u)    -> valores con atributo  u , cuenta el nivel L
+    //     PROLONGAR (el siguiente alterna, -u) -> valores con atributo -u , cuenta el nivel L+1
+    //     peso = P(el zigzag termina en k) = (1/2)^k  ;  diferencia con signo igual que en las rachas.
+
+    /** Zigzag en curso: lado con que inició, cuántos símbolos lleva y cuál fue el último símbolo. */
+    public record EstadoAlternancia(int ladoInicio, int largo, int ultimo) {}
+
+    /** Estado del zigzag en curso al llegar a la posición i (largo 0 si aún no hay resultados resueltos). */
+    public EstadoAlternancia estadoAlternancia(Dimension dim, int i, Valor[] juego) {
+        int ladoInicio = 0, largo = 0, ultimo = 0;
+        for (int j = 0; j <= Math.min(i, juego.length - 1); j++) {
+            int s = dim.de(juego[j]);
+            if (s == 0) continue;                          // el cero no participa
+            if (largo > 0 && s != ultimo) {
+                largo++;                                   // alterna: el zigzag crece
+            } else {
+                ladoInicio = s;                            // primer símbolo o repetición: abre un zigzag nuevo
+                largo = 1;
+            }
+            ultimo = s;
+        }
+        return new EstadoAlternancia(ladoInicio, largo, ultimo);
+    }
+
+    /**
+     * Zigzags CERRADOS de exactamente k símbolos (k = 2..maxNivel) hasta la posición i, que iniciaron con
+     * 'ladoInicio' (+1 / -1), o de ambos lados si ladoInicio == 0. El zigzag en curso no se cuenta.
+     */
+    public int[] contarAlternancias(Dimension dim, int ladoInicio, int i, Valor[] juego, int maxNivel) {
+        int[] cuenta = new int[maxNivel + 1];
+        int inicio = 0, largo = 0, ultimo = 0;
+        for (int j = 0; j <= Math.min(i, juego.length - 1); j++) {
+            int s = dim.de(juego[j]);
+            if (s == 0) continue;
+            if (largo > 0 && s != ultimo) {
+                largo++;
+            } else {
+                // repetición (o primer símbolo): se cierra el zigzag anterior
+                if (largo >= 2 && largo <= maxNivel && (ladoInicio == 0 || inicio == ladoInicio)) cuenta[largo]++;
+                inicio = s;
+                largo = 1;
+            }
+            ultimo = s;
+        }
+        return cuenta;
+    }
+
+    /** Cuántos resultados de juego[0..i] tienen atributo en 'dim' (no son el cero). */
+    public int resueltos(Dimension dim, int i) {
+        int n = 0;
+        for (int j = 0; j <= Math.min(i, juego.length - 1); j++) if (dim.de(juego[j]) != 0) n++;
+        return n;
+    }
+
+    /** Calor por la alternancia en curso, solo si el zigzag actual INICIÓ en 'ladoInicio'. */
+    public void calorAlternancia(Dimension dim, int ladoInicio, int i) {
+        if (dim == Dimension.FRANJA) return;               // la franja no tiene alternancia
+        EstadoAlternancia estado = estadoAlternancia(dim, i, juego);
+        if (estado.largo() == 0 || estado.ladoInicio() != ladoInicio) return;
+
+        int[] ocurridas = contarAlternancias(dim, ladoInicio, i, juego, NIVEL_MAX);
+        double[] esperadas = esperadasAlternancia(resueltos(dim, i), false);
+        repartirCalorAlternancia(dim, estado, ocurridas, esperadas);
+    }
+
+    /** Igual, midiendo la alternancia COMPLETA: zigzags de los dos lados de inicio juntos. */
+    public void calorAlternanciaTotal(Dimension dim, int i) {
+        if (dim == Dimension.FRANJA) return;
+        EstadoAlternancia estado = estadoAlternancia(dim, i, juego);
+        if (estado.largo() == 0) return;
+
+        int[] ocurridas = contarAlternancias(dim, 0, i, juego, NIVEL_MAX);
+        double[] esperadas = esperadasAlternancia(resueltos(dim, i), true);
+        repartirCalorAlternancia(dim, estado, ocurridas, esperadas);
+    }
+
+    /** Zigzags esperados de exactamente k símbolos; el nivel 1 no existe (queda en 0). */
+    private double[] esperadasAlternancia(double nResueltos, boolean ambosLados) {
+        double[] esperadas = new double[NIVEL_MAX + 1];
+        for (int k = 2; k <= NIVEL_MAX; k++) esperadas[k] = nResueltos * Math.pow(0.5, k + (ambosLados ? 1 : 2));
+        return esperadas;
+    }
+
+    private void repartirCalorAlternancia(Dimension dim, EstadoAlternancia estado, int[] ocurridas, double[] esperadas) {
+        int largo = estado.largo();
+
+        // ROMPER: el siguiente repite el último símbolo -> el zigzag se cierra con exactamente 'largo'
+        if (largo <= NIVEL_MAX) {
+            double diferencia = diferenciaDeRachas(esperadas[largo], ocurridas[largo]);
+            sumarCalorAlterno(dim, estado.ultimo(), probRachaTermina(largo, 0.5) * diferencia);
+        }
+
+        // PROLONGAR: el siguiente alterna (el opuesto) -> el zigzag llegará al menos a largo+1
+        int siguiente = largo + 1;
+        if (siguiente <= NIVEL_MAX) {
+            double diferencia = diferenciaDeRachas(esperadas[siguiente], ocurridas[siguiente]);
+            sumarCalorAlterno(dim, -estado.ultimo(), probRachaTermina(siguiente, 0.5) * diferencia);
+        }
+    }
+
+    /** Pone el calor de ALTERNANCIA de la dimensión en CALOR_BASE (1/37) para todos los números. */
+    private void fijarCalorBaseAlterno(Dimension dim) {
+        BigDecimal base = BigDecimal.valueOf(CALOR_BASE);
+        for (Valor v : tablero) v.sumarCalorAlterno(dim, base);
+    }
+
+    /** Suma calor de alternancia a CADA valor cuyo atributo en 'dim' es 'atributoDestino'. */
+    private void sumarCalorAlterno(Dimension dim, int atributoDestino, double calor) {
+        BigDecimal c = BigDecimal.valueOf(calor);
+        for (Valor v : tablero) {
+            if (dim.de(v) == atributoDestino) v.sumarCalorAlterno(dim, c);
         }
     }
 
