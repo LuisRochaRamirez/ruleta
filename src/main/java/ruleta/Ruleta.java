@@ -398,10 +398,23 @@ public final class Ruleta {
         }
     }
 
+    /**
+     * Igual que estadoAlternancia, pero si el último número cerró una racha (no hay zigzag contado) el siguiente
+     * número que alterne ABRIRÁ uno: se trata como un zigzag de largo 1 que empezaría en el lado opuesto al último.
+     * Así ese lado recibe el déficit de zigzags de nivel 2 (alternancias que "se deben"). Tras un cero no hay calor.
+     */
+    private EstadoAlternancia estadoAbierto(Dimension dim, int i) {
+        EstadoAlternancia estado = estadoAlternancia(dim, i, juego);
+        if (estado.largo() == 0 && estado.ultimo() != 0) {
+            return new EstadoAlternancia(-estado.ultimo(), 1, estado.ultimo());
+        }
+        return estado;
+    }
+
     /** Calor por la alternancia en curso, solo si el zigzag contado actual empezó en 'ladoInicio'. */
     public void calorAlternancia(Dimension dim, int ladoInicio, int i) {
         if (dim == Dimension.FRANJA) return;               // la franja no tiene alternancia
-        EstadoAlternancia estado = estadoAlternancia(dim, i, juego);
+        EstadoAlternancia estado = estadoAbierto(dim, i);
         if (estado.largo() == 0 || estado.ladoInicio() != ladoInicio) return;
 
         int[] ocurridas = contarAlternancias(dim, ladoInicio, i, juego, NIVEL_MAX);
@@ -412,7 +425,7 @@ public final class Ruleta {
     /** Igual, midiendo la alternancia COMPLETA: zigzags de los dos lados de inicio juntos. */
     public void calorAlternanciaTotal(Dimension dim, int i) {
         if (dim == Dimension.FRANJA) return;
-        EstadoAlternancia estado = estadoAlternancia(dim, i, juego);
+        EstadoAlternancia estado = estadoAbierto(dim, i);
         if (estado.largo() == 0) return;
 
         int[] ocurridas = contarAlternancias(dim, 0, i, juego, NIVEL_MAX);
