@@ -66,6 +66,16 @@ public enum Valor {
                 .add(calorAltoBajoAlterno);
     }
 
+    /** Suma calor al campo de la dimensión indicada (calorColor, calorParidad, calorAltoBajo, calorFranja). */
+    public void sumarCalor(Dimension dim, BigDecimal calor) {
+        switch (dim) {
+            case COLOR -> calorColor = calorColor.add(calor);
+            case PARIDAD -> calorParidad = calorParidad.add(calor);
+            case ALTOBAJO -> calorAltoBajo = calorAltoBajo.add(calor);
+            case FRANJA -> calorFranja = calorFranja.add(calor);
+        }
+    }
+
     /** Pone en cero el calor de todas las dimensiones. */
     public void limpiarCalor() {
         calorColor = calorParidad = calorUpdown = calorFranja = calorAltoBajo = BigDecimal.ZERO;

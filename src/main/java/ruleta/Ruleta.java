@@ -11,6 +11,19 @@ public final class Ruleta {
     public Valor[] tablero = new Valor[]{V0, V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18, V19, V20, V21, V22, V23, V24, V25, V26, V27, V28, V29, V30, V31, V32, V33, V34, V35, V36};
     public Valor[] juego;
 
+    /** Calor inicial de cada número y al que vuelve cuando ocurridas == esperadas. */
+    private static final double CALOR_BASE = 1.0 / 37;
+
+    /**
+     * Zona de "igual": si |esperadas - ocurridas| <= TOLERANCIA * esperadas se considera igual
+     * (diferencia 0). Tu criterio conservador del 3% / 5% sería 0.03 / 0.05. Con 0.0 solo es
+     * "igual" cuando coinciden exactamente (con decimales casi nunca ocurre).
+     */
+    private static final double TOLERANCIA = 0.0;
+
+    /** Niveles de racha que se contabilizan (1..NIVEL_MAX). */
+    private static final int NIVEL_MAX = 8;
+
     public void cargarReal(String path) throws IOException {
         juego = Datos.leerValores(path);
         System.out.println("cargada muestra real limpia: " + juego.length + " registros");
@@ -84,7 +97,7 @@ public final class Ruleta {
         return contarRachas(dim, lado, i, juego, nivel)[nivel];
     }
 
-    /** Atajo con la firma que usas en calculaCalor: dimensión COLOR. */
+    /** Atajo con la firma original de tu borrador: dimensión COLOR. */
     public int contadorRacha(int lado, int nivel, int i, Valor[] juego) {
         return contadorRacha(Dimension.COLOR, lado, nivel, i, juego);
     }
@@ -134,16 +147,8 @@ public final class Ruleta {
      * parámetro i, así el calor en la posición i no depende del futuro.)
      */
     public void calculaCalor(int i) {
-        // el calor de cada número parte de CALOR_BASE = 1/37 (probabilidad de un pleno).
-        // Como todos parten igual, no cambia cuál es el más caliente: solo marca el "igual".
-        for (Valor v : tablero) v.calorColor = BigDecimal.valueOf(CALOR_BASE);
-
-        // TODO: aqui va el algoritmo (asignar calor según rachas por dimension)
-
         /**
          * Para cada dimension binaria asignar la formula de asignacion de calor
-         *
-         * empezaremos revisando los rojos
          *
          * para el numero de datos leidos previamente se espera que exista 1/2 de rojos
          * de todos los rojos se espera que 1/2 sean rachas de 1
@@ -155,88 +160,81 @@ public final class Ruleta {
          * debo saber en que elemento estoy y ver el pasado, la cantidad de rachas esperadas al momento vs las no cumplidas y esperar a que se cumplan
          */
 
-        //empezamos por racha de rojos
-        int rachas1RojoOcurridas = contadorRacha(Atributo.ROJO, 1, i, juego);
-        int rachas2RojoOcurridas = contadorRacha(Atributo.ROJO, 2, i, juego);
-        int rachas3RojoOcurridas = contadorRacha(Atributo.ROJO, 3, i, juego);
-        int rachas4RojoOcurridas = contadorRacha(Atributo.ROJO, 4, i, juego);
-        int rachas5RojoOcurridas = contadorRacha(Atributo.ROJO, 5, i, juego);
-        int rachas6RojoOcurridas = contadorRacha(Atributo.ROJO, 6, i, juego);
-        int rachas7RojoOcurridas = contadorRacha(Atributo.ROJO, 7, i, juego);
-        int rachas8RojoOcurridas = contadorRacha(Atributo.ROJO, 8, i, juego);
+        // el calor de cada número parte de CALOR_BASE = 1/37 (probabilidad de un pleno).
+        // Como todos parten igual, no cambia cuál es el más caliente: solo marca el "igual".
+        fijarCalorBase(Dimension.COLOR);
 
-        // FIX 1: (18/37) en Java es división ENTERA = 0 -> todo lo esperado daba 0. Usar 18.0/37.
-        // FIX 2: n = datos leídos hasta i (i+1), no juego.length (eso usaba el futuro).
-        // FIX 3: double en vez de int; (int) truncaba a 0 en muestras chicas y las
-        //        divisiones /2 encadenadas perdían todo.
-        // FIX 4: rachas8 copiaba rachas7 (faltaba el /2).
-        double n = i + 1;
-        double pRojo = 18.0 / 37;      // un giro cualquiera es rojo
-        double pNoRojo = 19.0 / 37;    // negro o cero: lo que rompe una racha roja
-        // Racha roja de EXACTAMENTE 1 = [no rojo][rojo][no rojo] -> n * pNoRojo * pRojo * pNoRojo ≈ 0.128*n.
-        // Tu fórmula n*(18/37)*0.5 ≈ 0.243*n era el DOBLE: la mitad de las RACHAS son de 1,
-        // pero rachas ≈ n*pRojo*pNoRojo, no n*pRojo (eso son los giros rojos).
-        // Entre un nivel y el siguiente la razón real es pRojo (0.4865); es tu "1/2" pero
-        // incluyendo que el cero también rompe.
-        double rachas1RojoEsperadas = n * pNoRojo * pRojo * pNoRojo;
-        double rachas2RojoEsperadas = rachas1RojoEsperadas * pRojo;
-        double rachas3RojoEsperadas = rachas2RojoEsperadas * pRojo;
-        double rachas4RojoEsperadas = rachas3RojoEsperadas * pRojo;
-        double rachas5RojoEsperadas = rachas4RojoEsperadas * pRojo;
-        double rachas6RojoEsperadas = rachas5RojoEsperadas * pRojo;
-        double rachas7RojoEsperadas = rachas6RojoEsperadas * pRojo;
-        double rachas8RojoEsperadas = rachas7RojoEsperadas * pRojo;
+        // Rachas de color: cada llamada actúa solo si el último resultado es de ese lado.
+        calorRacha(Dimension.COLOR, Atributo.ROJO, i);
+        calorRacha(Dimension.COLOR, Atributo.NEGRO, i);
 
-        //este es el valor de este giro
-        Valor resultadoActual = juego[i];
-
-        //si el resultado es R estoy en una racha de 1 a n, debo ver en cual de esas rachas podria estoy y hasta cual podria llegar
-        boolean iniciaRacha2Rojo = (resultadoActual.color == Atributo.ROJO);
-        if (iniciaRacha2Rojo) {
-
-            // cuántos rojos seguidos llevo (R = 1, RR = 2, ...)
-            int largoActual = largoRachaActual(Dimension.COLOR, i, juego);
-
-            // para indexar por nivel k = 1..8 (los mismos valores de arriba)
-            int[] ocurridas = {0, rachas1RojoOcurridas, rachas2RojoOcurridas, rachas3RojoOcurridas, rachas4RojoOcurridas,
-                    rachas5RojoOcurridas, rachas6RojoOcurridas, rachas7RojoOcurridas, rachas8RojoOcurridas};
-            double[] esperadas = {0, rachas1RojoEsperadas, rachas2RojoEsperadas, rachas3RojoEsperadas, rachas4RojoEsperadas,
-                    rachas5RojoEsperadas, rachas6RojoEsperadas, rachas7RojoEsperadas, rachas8RojoEsperadas};
-
-            // Diferencia = esperadas - ocurridas, CON SIGNO:
-            //   faltan rachas  (ocurridas < esperadas)  -> diferencia > 0 -> SUMA calor
-            //   sobran rachas  (ocurridas > esperadas)  -> diferencia < 0 -> RESTA calor
-            //   iguales                                 -> diferencia = 0 -> el calor queda en CALOR_BASE (1/37)
-            // y vuelve a subir porque 'esperadas' crece con cada giro.
-
-            // ROMPER (sale negro/cero): la racha se cierra con EXACTAMENTE 'largoActual' rojos,
-            // así que cuenta el nivel L.
-            if (largoActual <= 8) {
-                double diferencia = diferenciaDeRachas(esperadas[largoActual], ocurridas[largoActual]);
-                // CADA negro recibe el valor completo (no se reparte)
-                sumarCalorColor(Atributo.NEGRO, probRachaTermina(largoActual) * diferencia);
-            }
-
-            // PROLONGAR (sale otro rojo): la racha llegará al menos a L+1, así que cuenta el nivel L+1.
-            int siguiente = largoActual + 1;
-            if (siguiente <= 8) {
-                double diferencia = diferenciaDeRachas(esperadas[siguiente], ocurridas[siguiente]);
-                // CADA rojo recibe el valor completo
-                sumarCalorColor(Atributo.ROJO, probRachaTermina(siguiente) * diferencia);
-            }
-        }
-        // PENDIENTE: ¿y cuando el resultado actual es NEGRO? (racha negra / ruptura de rojos)
+        // PENDIENTE (en este orden): alternancia roja, alternancia negra, color total,
+        // alternancia total, y después las demás dimensiones:
+        //   calorRacha(Dimension.PARIDAD, Atributo.PAR, i);   calorRacha(Dimension.PARIDAD, Atributo.IMPAR, i);
+        //   calorRacha(Dimension.ALTOBAJO, ...);  calorRacha(Dimension.FRANJA, ...);
     }
 
-    /** Calor inicial de cada número y al que vuelve cuando ocurridas == esperadas. */
-    private static final double CALOR_BASE = 1.0 / 37;
+    /**
+     * Reparte calor por la racha ACTUAL de 'lado' en la dimensión 'dim'. Solo actúa si el último
+     * resultado juego[i] pertenece a ese lado (si no, no hay racha de ese lado en curso).
+     *
+     * Sea L cuántos elementos seguidos llevo en ese lado:
+     *  - ROMPER (sale el lado contrario o el cero): la racha se cierra con EXACTAMENTE L,
+     *    así que cuenta el nivel L.   -> calor a los valores del lado CONTRARIO.
+     *  - PROLONGAR (sale otro del mismo lado): llegará al menos a L+1,
+     *    así que cuenta el nivel L+1. -> calor a los valores del MISMO lado.
+     *
+     * Calor de cada valor del destino (el valor completo, no se reparte):
+     *     P(racha termina en k) * (esperadas[k] - ocurridas[k])      con signo:
+     *     faltan rachas -> suma ; sobran -> resta ; iguales -> 0 (queda en CALOR_BASE).
+     *
+     * Esperadas: con pLado = probabilidad de un giro en ese lado y pNoLado = 1 - pLado
+     * (el otro lado más el cero), una racha de EXACTAMENTE 1 es [no lado][lado][no lado]:
+     *     esperadas[1] = n * pNoLado * pLado * pNoLado ;   esperadas[k] = esperadas[k-1] * pLado
+     * Para rojo/negro, par/impar, alto/bajo y franja pLado = 18/37.
+     */
+    public void calorRacha(Dimension dim, int lado, int i) {
+        if (dim.de(juego[i]) != lado) return;
+
+        double pLado = probLado(dim, lado);
+        double n = i + 1;                                   // datos leídos hasta i (no el futuro)
+
+        int[] ocurridas = contarRachas(dim, lado, i, juego, NIVEL_MAX);
+        double[] esperadas = new double[NIVEL_MAX + 1];
+        esperadas[1] = n * (1 - pLado) * pLado * (1 - pLado);
+        for (int k = 2; k <= NIVEL_MAX; k++) esperadas[k] = esperadas[k - 1] * pLado;
+
+        int largoActual = largoRachaActual(dim, i, juego);
+
+        // ROMPER -> valores del lado contrario
+        if (largoActual <= NIVEL_MAX) {
+            double diferencia = diferenciaDeRachas(esperadas[largoActual], ocurridas[largoActual]);
+            sumarCalor(dim, -lado, probRachaTermina(largoActual, pLado) * diferencia);
+        }
+
+        // PROLONGAR -> valores del mismo lado
+        int siguiente = largoActual + 1;
+        if (siguiente <= NIVEL_MAX) {
+            double diferencia = diferenciaDeRachas(esperadas[siguiente], ocurridas[siguiente]);
+            sumarCalor(dim, lado, probRachaTermina(siguiente, pLado) * diferencia);
+        }
+    }
+
+    /** Probabilidad de que un giro caiga en ese lado de esa dimensión (el cero no está en ningún lado). */
+    private double probLado(Dimension dim, int lado) {
+        long cuantos = Arrays.stream(tablero).filter(v -> v.valor != 0 && dim.de(v) == lado).count();
+        return cuantos / 37.0;
+    }
 
     /**
-     * Zona de "igual": si |esperadas - ocurridas| <= TOLERANCIA * esperadas se considera igual
-     * (diferencia 0). Tu criterio conservador del 3% / 5% sería 0.03 / 0.05. Con 0.0 solo es
-     * "igual" cuando coinciden exactamente (con decimales casi nunca ocurre).
+     * Probabilidad de que una racha ya iniciada termine EXACTAMENTE en k elementos:
+     * (k-1 más del mismo lado y luego uno que no) = pLado^(k-1) * (1 - pLado).
+     * Es tu "0.5^k" con el cero incluido: en rojo k=1 -> 0.5135, k=2 -> 0.2498, k=3 -> 0.1215.
+     * Ya contiene la probabilidad de que salga el lado, por eso NO se vuelve a multiplicar por pLado.
      */
-    private static final double TOLERANCIA = 0.0;
+    private double probRachaTermina(int k, double pLado) {
+        return (1 - pLado) * Math.pow(pLado, k - 1);
+    }
 
     /** esperadas - ocurridas con signo; 0 si están dentro de la zona de "igual". */
     private double diferenciaDeRachas(double esperadas, int ocurridas) {
@@ -245,24 +243,20 @@ public final class Ruleta {
         return d;
     }
 
-    /**
-     * Probabilidad de que una racha roja ya iniciada termine EXACTAMENTE en k elementos:
-     * (k-1 rojos más y luego un no-rojo) = (18/37)^(k-1) * (19/37).  Es tu "0.5^k" con el cero
-     * incluido: k=1 -> 0.5135, k=2 -> 0.2498, k=3 -> 0.1215 (tu 0.5, 0.25, 0.125).
-     * Ya contiene la probabilidad de que salga rojo, por eso NO hay que volver a multiplicar por 18/37.
-     */
-    private double probRachaTermina(int k) {
-        return (19.0 / 37) * Math.pow(18.0 / 37, k - 1);
+    /** Pone el calor de la dimensión 'dim' de todos los números en CALOR_BASE (1/37). */
+    private void fijarCalorBase(Dimension dim) {
+        BigDecimal base = BigDecimal.valueOf(CALOR_BASE);
+        for (Valor v : tablero) v.sumarCalor(dim, base);   // se asume calor limpio (en cero) antes de llamar
     }
 
     /**
-     * Suma 'calor' a calorColor de CADA valor del tablero cuyo color es 'colorBuscado'
-     * (Atributo.ROJO / NEGRO). Supuesto: este calor va a calorColor (pregunta 3).
+     * Suma 'calor' en la dimensión 'dim' a CADA valor del tablero cuyo atributo en esa
+     * dimensión es 'atributoDestino' (+1 / -1). El cero (atributo 0) nunca recibe calor.
      */
-    private void sumarCalorColor(int colorBuscado, double calor) {
+    private void sumarCalor(Dimension dim, int atributoDestino, double calor) {
         BigDecimal c = BigDecimal.valueOf(calor);
         for (Valor v : tablero) {
-            if (v.color == colorBuscado) v.calorColor = v.calorColor.add(c);
+            if (dim.de(v) == atributoDestino) v.sumarCalor(dim, c);
         }
     }
 }
