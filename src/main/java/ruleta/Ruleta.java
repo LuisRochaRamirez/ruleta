@@ -190,28 +190,47 @@ public final class Ruleta {
         boolean iniciaRacha2Rojo = (resultadoActual.color == Atributo.ROJO);
         if (iniciaRacha2Rojo) {
 
-            // cuántos rojos seguidos llevo (R = 1, RR = 2, ...). Una racha solo puede
-            // TERMINAR en el nivel en que está ahora: en RR ya no puede ser "racha de 1".
+            // cuántos rojos seguidos llevo (R = 1, RR = 2, ...)
             int largoActual = largoRachaActual(Dimension.COLOR, i, juego);
 
-            if (largoActual == 1 && rachas1RojoOcurridas < rachas1RojoEsperadas) {//quiza poner un criterio conservador de una variacion esperada segun las mediciones, quiza de un 3%
-                //espero que sea racha de 1, es decir los valores del tablero que rompen la racha suman un calor de 0.5 * (rachas1RojoEsperadas - rachas1RojoOcurridas)
-                // (leído como 0.5 * faltantes; "0.5*E - O" sería negativo casi siempre)
-                double calor = 0.5 * (rachas1RojoEsperadas - rachas1RojoOcurridas);
-                sumarCalorColor(Atributo.NEGRO, calor);   // CADA negro recibe 'calor' completo (no se reparte)
+            // para indexar por nivel k = 1..8 (los mismos valores de arriba)
+            int[] ocurridas = {0, rachas1RojoOcurridas, rachas2RojoOcurridas, rachas3RojoOcurridas, rachas4RojoOcurridas,
+                    rachas5RojoOcurridas, rachas6RojoOcurridas, rachas7RojoOcurridas, rachas8RojoOcurridas};
+            double[] esperadas = {0, rachas1RojoEsperadas, rachas2RojoEsperadas, rachas3RojoEsperadas, rachas4RojoEsperadas,
+                    rachas5RojoEsperadas, rachas6RojoEsperadas, rachas7RojoEsperadas, rachas8RojoEsperadas};
+
+            // criterio conservador (tu idea del 3% / 5%): exigir que falte MÁS de esta fracción de lo esperado.
+            // 0 = sin tolerancia. Ejemplo: 0.03 -> solo se activa si ocurridas < 97% de las esperadas.
+            final double TOLERANCIA = 0.0;
+
+            // ROMPER (sale negro/cero): la racha se cierra con EXACTAMENTE 'largoActual' rojos,
+            // así que la ayudan los faltantes de ESE nivel.
+            if (largoActual <= 8 && ocurridas[largoActual] < esperadas[largoActual] * (1 - TOLERANCIA)) {
+                double faltantes = esperadas[largoActual] - ocurridas[largoActual];
+                // CADA negro recibe el valor completo (no se reparte)
+                sumarCalorColor(Atributo.NEGRO, probRachaTermina(largoActual) * faltantes);
             }
 
-            //Si el resulatdo es RR y ademas hay una deficiencia conservadora de rachas de 2 rojo
-            if (largoActual == 2 && rachas2RojoOcurridas < rachas2RojoEsperadas) {//quiza poner un criterio conservador de una variacion esperada segun las mediciones, quiza de un 5%
-                //espero una racha de 2, es decir los valores del tablero que rompen la racha suman un valor de 0.5*0.5 * cada giro faltante para equiparar las rachas de 2 con sus esperadas
-                double calor = 0.5 * 0.5 * (rachas2RojoEsperadas - rachas2RojoOcurridas);
-                sumarCalorColor(Atributo.NEGRO, calor);
+            // PROLONGAR (sale otro rojo): la racha llegará al menos a largoActual+1,
+            // así que la ayudan los faltantes del nivel SIGUIENTE (si falta una RR y estoy en R, el rojo suma).
+            int siguiente = largoActual + 1;
+            if (siguiente <= 8 && ocurridas[siguiente] < esperadas[siguiente] * (1 - TOLERANCIA)) {
+                double faltantes = esperadas[siguiente] - ocurridas[siguiente];
+                // CADA rojo recibe el valor completo
+                sumarCalorColor(Atributo.ROJO, probRachaTermina(siguiente) * faltantes);
             }
-
-            // PENDIENTE (pregunta 2): ¿una deuda del nivel siguiente empuja a PROLONGAR?
-            // p.ej. en R (largo 1) con faltantes de rachas de 2 -> calor a los ROJOS.
         }
         // PENDIENTE: ¿y cuando el resultado actual es NEGRO? (racha negra / ruptura de rojos)
+    }
+
+    /**
+     * Probabilidad de que una racha roja ya iniciada termine EXACTAMENTE en k elementos:
+     * (k-1 rojos más y luego un no-rojo) = (18/37)^(k-1) * (19/37).  Es tu "0.5^k" con el cero
+     * incluido: k=1 -> 0.5135, k=2 -> 0.2498, k=3 -> 0.1215 (tu 0.5, 0.25, 0.125).
+     * Ya contiene la probabilidad de que salga rojo, por eso NO hay que volver a multiplicar por 18/37.
+     */
+    private double probRachaTermina(int k) {
+        return (19.0 / 37) * Math.pow(18.0 / 37, k - 1);
     }
 
     /**
