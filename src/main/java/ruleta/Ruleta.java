@@ -184,9 +184,10 @@ public final class Ruleta {
          * Para cada dimension binaria asignar la formula de asignacion de calor
          *
          * para el numero de datos leidos previamente se espera que exista 1/2 de rojos
-         * de todos los rojos se espera que 1/2 sean rachas de 1
-         * de todas las las rachas de 2 se espera que 1/2 sean rachas de 3
-         * sucesivamente
+         * las RACHAS rojas son n/4 en total (cada racha mide 2 giros en promedio); de esas RACHAS
+         * (no de los giros) 1/2 son de nivel 1 (n/8 en la muestra), y cada nivel tiene 1/2 de las
+         * rachas del nivel anterior (n/16 de nivel 2, n/32 de nivel 3...). Con el cero: p = 18/37.
+         * Ver esperadasPorNivel: esperadas[1] = n*(1-p)*p*(1-p), esperadas[k] = esperadas[k-1]*p
          *
          * OPCIONAL: el valor de calor inicial para cada numero es 1/37 que es la probabilidad individual de numero pleno
          *
