@@ -44,7 +44,7 @@ public enum Valor {
     V35(35, NEGRO, IMPAR, ALTO, INFERIOR),
     V36(36, ROJO, PAR, ALTO, SUPERIOR);
 
-    public int valor, color, paridad, altobajo, franja;
+    public int valor, color, paridad, altobajo, franja, docena, columna;
 
     // Calor por dimensión. Inicializados en ZERO: antes eran null y cualquier
     // .add() lanzaba NullPointerException.
@@ -54,6 +54,12 @@ public enum Valor {
     public BigDecimal calorFranja = BigDecimal.ZERO;
     public BigDecimal calorAltoBajo = BigDecimal.ZERO;
 
+    // Dimensiones TERNARIAS. Cada campo acumula DOS piezas que se suman juntas, sin separarlas
+    // (decisión del usuario): (A) racha de "misma docena/columna exacta" (p=12/37 de seguir) y
+    // (B) racha de "esta docena/columna contra las otras dos" (p=24/37 de seguir, rompe = cambia).
+    public BigDecimal calorDocena = BigDecimal.ZERO;
+    public BigDecimal calorColumna = BigDecimal.ZERO;
+
     public BigDecimal calorColorAlterno = BigDecimal.ZERO;
     public BigDecimal calorParidadAlterno = BigDecimal.ZERO;
     public BigDecimal calorUpdownAlterno = BigDecimal.ZERO;
@@ -62,17 +68,20 @@ public enum Valor {
     /** Calor total del número = suma del calor de todas las dimensiones. */
     public BigDecimal calorTotal() {
         return calorColor.add(calorParidad).add(calorUpdown).add(calorFranja).add(calorAltoBajo)
+                .add(calorDocena).add(calorColumna)
                 .add(calorColorAlterno).add(calorParidadAlterno).add(calorUpdownAlterno)
                 .add(calorAltoBajoAlterno);
     }
 
-    /** Suma calor al campo de la dimensión indicada (calorColor, calorParidad, calorAltoBajo, calorFranja). */
+    /** Suma calor al campo de la dimensión indicada (calorColor, calorParidad, calorAltoBajo, calorFranja, calorDocena, calorColumna). */
     public void sumarCalor(Dimension dim, BigDecimal calor) {
         switch (dim) {
             case COLOR -> calorColor = calorColor.add(calor);
             case PARIDAD -> calorParidad = calorParidad.add(calor);
             case ALTOBAJO -> calorAltoBajo = calorAltoBajo.add(calor);
             case FRANJA -> calorFranja = calorFranja.add(calor);
+            case DOCENA -> calorDocena = calorDocena.add(calor);
+            case COLUMNA -> calorColumna = calorColumna.add(calor);
         }
     }
 
@@ -85,13 +94,14 @@ public enum Valor {
             case COLOR -> calorColorAlterno = calorColorAlterno.add(calor);
             case PARIDAD -> calorParidadAlterno = calorParidadAlterno.add(calor);
             case ALTOBAJO -> calorAltoBajoAlterno = calorAltoBajoAlterno.add(calor);
-            case FRANJA -> throw new UnsupportedOperationException("la franja no tiene alternancia");
+            case FRANJA, DOCENA, COLUMNA -> throw new UnsupportedOperationException(dim + " no tiene alternancia");
         }
     }
 
     /** Pone en cero el calor de todas las dimensiones. */
     public void limpiarCalor() {
         calorColor = calorParidad = calorUpdown = calorFranja = calorAltoBajo = BigDecimal.ZERO;
+        calorDocena = calorColumna = BigDecimal.ZERO;
         calorColorAlterno = calorParidadAlterno = calorUpdownAlterno = calorAltoBajoAlterno = BigDecimal.ZERO;
     }
 
@@ -101,6 +111,9 @@ public enum Valor {
         this.paridad = paridad;
         this.altobajo = altobajo;
         this.franja = franja;
+        this.docena = valor == 0 ? DOCENA_NONE : (valor <= 12 ? DOCENA1 : valor <= 24 ? DOCENA2 : DOCENA3);
+        // columnas de la mesa: COLUMNA1 = ...,34 (valor % 3 == 1), COLUMNA2 = ...,35 (% 3 == 2), COLUMNA3 = ...,36 (% 3 == 0)
+        this.columna = valor == 0 ? COLUMNA_NONE : (valor % 3 == 1 ? COLUMNA1 : valor % 3 == 2 ? COLUMNA2 : COLUMNA3);
     }
 
 }

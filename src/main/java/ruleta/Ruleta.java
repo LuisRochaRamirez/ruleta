@@ -196,9 +196,15 @@ public final class Ruleta {
 
         // el calor de cada número parte de CALOR_BASE = 1/37 (probabilidad de un pleno).
         // Como todos parten igual, no cambia cuál es el más caliente: solo marca el "igual".
-        for (Dimension dim : Dimension.values()) {          // COLOR, PARIDAD, ALTOBAJO, FRANJA
-            // 1) rachas del propio atributo (calor<Dim>): cada lado y el total de la dimensión
+        for (Dimension dim : Dimension.values()) {          // COLOR, PARIDAD, ALTOBAJO, FRANJA, DOCENA, COLUMNA
             fijarCalorBase(dim);
+
+            if (dim.esTernaria()) {                          // DOCENA, COLUMNA: 3 lados, sin alternancia
+                calorRachaTernaria(dim, i);
+                continue;
+            }
+
+            // 1) rachas del propio atributo (calor<Dim>): cada lado y el total de la dimensión
             calorRacha(dim, 1, i);        // lado +1: ROJO / PAR / ALTO / SUPERIOR
             calorRacha(dim, -1, i);       // lado -1: NEGRO / IMPAR / BAJO / INFERIOR
             calorRachaTotal(dim, i);
@@ -250,6 +256,167 @@ public final class Ruleta {
         double[] esperadasContrario = esperadasPorNivel(i + 1, probLado(dim, ladoContrario));
 
         repartirCalor(dim, lado, i, pLado, ocurridas, esperadas, ocurridasContrario[1], esperadasContrario[1]);
+    }
+
+    // ------------------------------------------------------------------
+    //  DIMENSIONES TERNARIAS (DOCENA, COLUMNA: 3 lados en vez de 2)
+    // ------------------------------------------------------------------
+    //
+    // Un mismo campo de calor (calorDocena / calorColumna) acumula DOS piezas distintas, sumadas sin
+    // separarlas (así lo pidió el usuario):
+    //
+    //   (A) Racha de "esta docena/columna EXACTA" (p = 12/37 de seguir en el mismo lado; los otros dos
+    //       lados + el cero son "no lado", 25/37). Es la ley de la mitad pero afilada a 1/3 por nivel,
+    //       igual que una dimensión binaria con 3 lados en vez de 2:
+    //           esperadas[1] = n * (1-p) * p * (1-p) ;  esperadas[k] = esperadas[k-1] * p
+    //       Al ROMPER (sale otro lado, cualquiera de los dos, o el cero) la racha se cierra con
+    //       exactamente L: el calor de esa ruptura se reparte POR IGUAL entre los otros dos lados
+    //       (no se sabe todavía cuál de los dos sigue).
+    //       Al PROLONGAR (sale el mismo lado) la racha llega a L+1: calor al mismo lado.
+    //
+    //   (B) Racha de "esta docena/columna CONTRA las otras dos juntas" (p = 24/37 de seguir en el
+    //       grupo de 2; "no lado" = el lado restante, 12/37). Es la MISMA racha física que (A) (se
+    //       extiende mientras se repite la misma docena/columna), pero medida con la probabilidad
+    //       binaria 24/37 en vez de 12/37. Al ROMPER, igual que (A): el calor se reparte por igual
+    //       entre los otros dos lados (interpretación del algoritmo: "romper" es "cambiar de lado",
+    //       sin favorecer a ninguno de los dos posibles lados siguientes).
+    //
+    // No hay alternancia en las ternarias (no se pidió) ni nivel-1-que-se-abre-al-romper (con 3 lados
+    // el lado que se abre no se conoce hasta el siguiente dato, así que esa pieza queda fuera).
+
+    /** Calor de una dimensión TERNARIA (DOCENA o COLUMNA): junta las piezas (A) y (B) en el mismo campo. */
+    public void calorRachaTernaria(Dimension dim, int i) {
+        int lado = dim.de(juego[i]);
+        if (lado == 0) return;                              // el cero no participa
+
+        int largoActual = largoRachaActual(dim, i, juego);
+        double n = i + 1;
+
+        // (A) "esta docena/columna exacta" vs las otras dos + el cero
+        double pA = probLado(dim, lado);
+        int[] ocurridasA = contarRachasConAcumulado(dim, lado, i, juego, NIVEL_MAX);
+        double[] esperadasA = esperadasPorNivel(n, pA);
+        repartirCalorTernario(dim, lado, largoActual, pA, ocurridasA, esperadasA);
+
+        // (B) para CADA uno de los 3 lados: racha binaria "este lado sí" / "este lado no" (las otras dos
+        // docenas/columnas JUNTAS). Es una racha DISTINTA a la de (A): se rompe cuando el giro sale de ese
+        // grupo de 2, no cuando cambia de número exacto. Por ejemplo DOCENA1,DOCENA2,DOCENA1,DOCENA1: para
+        // el grupo "no-DOCENA1" eso es racha-no(1), racha-sí(1), racha-no(2) -> rompe en el giro 2 y en el 3,
+        // mientras que la racha de (A) (DOCENA1 exacta) rompe solo en el giro 2. Las 3 piezas (una por lado)
+        // se suman al mismo campo calorDocena/calorColumna, junto con (A).
+        for (int ladoB : ladosDe(dim)) calorRachaBinariaDeGrupo(dim, ladoB, i);
+    }
+
+    /**
+     * Pieza (B): racha BINARIA de "lado" contra "los otros dos juntos" (probabilidad binaria pB = 24/37).
+     * Mismo mecanismo que calorRacha (binarias normales), pero aquí 'lado' es 1/2/3 y "el contrario" es
+     * el grupo de los otros dos: al romper, el calor del grupo contrario se reparte por igual entre esos
+     * dos lados (no hay forma de saber, dentro del grupo, cuál de los dos sigue).
+     */
+    private void calorRachaBinariaDeGrupo(Dimension dim, int lado, int i) {
+        boolean ultimoEsDeEseLado = dim.de(juego[i]) == lado;
+        double pB = probLado(dim, lado);                     // 12/37: probabilidad de "lado"; "no lado" = 25/37 (incluye cero)
+        int largoActual = largoRachaDeGrupo(dim, lado, i, ultimoEsDeEseLado);
+        if (largoActual == 0) return;                         // el último fue del grupo contrario o no hay historia útil aquí
+
+        int[] ocurridas = contarRachasDeGrupoConAcumulado(dim, lado, i, NIVEL_MAX, ultimoEsDeEseLado);
+        double[] esperadas = esperadasPorNivel(i + 1, ultimoEsDeEseLado ? pB : 1 - pB);
+
+        if (ultimoEsDeEseLado) {
+            // ROMPER (sale cualquiera de los otros dos) -> calor repartido por igual entre esos dos lados
+            if (largoActual <= NIVEL_MAX) {
+                int nivelQueCierra = Math.min(largoActual, NIVEL_MAX);
+                double diferencia = diferenciaDeRachas(esperadas[nivelQueCierra], ocurridas[nivelQueCierra]);
+                double calorRuptura = pesoDelNivel(nivelQueCierra, largoActual, pB) * diferencia / 2;
+                sumarCalor(dim, otroLado1(lado), calorRuptura);
+                sumarCalor(dim, otroLado2(lado), calorRuptura);
+            }
+            // PROLONGAR (sale otra vez 'lado') -> calor a 'lado'
+            int siguiente = largoActual + 1;
+            if (siguiente <= NIVEL_MAX) {
+                double diferencia = diferenciaDeRachas(esperadas[siguiente], ocurridas[siguiente]);
+                sumarCalor(dim, lado, pesoDelNivel(siguiente, siguiente, pB) * diferencia);
+            }
+        } else {
+            // el último fue del grupo CONTRARIO: romper ese grupo -> calor a 'lado'; prolongarlo -> a los otros dos
+            double pNoLado = 1 - pB;
+            if (largoActual <= NIVEL_MAX) {
+                int nivelQueCierra = Math.min(largoActual, NIVEL_MAX);
+                double diferencia = diferenciaDeRachas(esperadas[nivelQueCierra], ocurridas[nivelQueCierra]);
+                sumarCalor(dim, lado, pesoDelNivel(nivelQueCierra, largoActual, pNoLado) * diferencia);
+            }
+            int siguiente = largoActual + 1;
+            if (siguiente <= NIVEL_MAX) {
+                double diferencia = diferenciaDeRachas(esperadas[siguiente], ocurridas[siguiente]);
+                double calorProlonga = pesoDelNivel(siguiente, siguiente, pNoLado) * diferencia / 2;
+                sumarCalor(dim, otroLado1(lado), calorProlonga);
+                sumarCalor(dim, otroLado2(lado), calorProlonga);
+            }
+        }
+    }
+
+    /** Largo de la racha abierta del grupo (lado, o su contrario) que termina en i. 0 si el cero corta justo en i. */
+    private int largoRachaDeGrupo(Dimension dim, int lado, int i, boolean deEseLado) {
+        if (dim.de(juego[i]) == 0) return 0;
+        int largo = 0;
+        for (int j = i; j >= 0; j--) {
+            int atributo = dim.de(juego[j]);
+            if (atributo == 0) break;                        // el cero corta el grupo igual que corta el lado exacto
+            boolean esDeEseLado = atributo == lado;
+            if (esDeEseLado != deEseLado) break;
+            largo++;
+        }
+        return largo;
+    }
+
+    /**
+     * Rachas cerradas del grupo buscado (lado si deEseLado=true, o "cualquiera de los otros dos" si
+     * deEseLado=false) hasta i, con el último nivel acumulado. El cero corta cualquier racha de grupo,
+     * igual que corta una racha de lado exacto; no abre ninguno de los dos grupos.
+     */
+    private int[] contarRachasDeGrupoConAcumulado(Dimension dim, int lado, int i, int maxNivel, boolean deEseLado) {
+        int[] cuenta = new int[maxNivel + 1];
+        int largo = 0;
+        for (int j = 0; j <= i; j++) {
+            int atributo = dim.de(juego[j]);
+            boolean perteneceAlGrupoBuscado = atributo != 0 && ((atributo == lado) == deEseLado);
+            if (perteneceAlGrupoBuscado) {
+                largo++;
+            } else {
+                if (largo >= 1) cuenta[Math.min(largo, maxNivel)]++;   // se cerró una racha (por el cero o por el otro grupo)
+                largo = 0;
+            }
+        }
+        return cuenta;
+    }
+
+    private int otroLado1(int lado) { return lado == 1 ? 2 : 1; }
+    private int otroLado2(int lado) { return lado == 3 ? 2 : 3; }
+
+    /**
+     * Reparte el calor de una racha ternaria (lado actual, largo L, probabilidad pLado de ese lado) igual que
+     * repartirCalor, pero al ROMPER el calor se reparte POR IGUAL entre los OTROS DOS lados (no hay un único
+     * "lado contrario" como en las binarias).
+     */
+    private void repartirCalorTernario(Dimension dim, int lado, int largoActual, double pLado, int[] ocurridas,
+                                       double[] esperadas) {
+        int otro1 = otroLado1(lado), otro2 = otroLado2(lado);
+
+        // ROMPER -> la mitad del calor a cada uno de los otros dos lados
+        if (largoActual >= 1) {
+            int nivelQueCierra = Math.min(largoActual, NIVEL_MAX);
+            double diferencia = diferenciaDeRachas(esperadas[nivelQueCierra], ocurridas[nivelQueCierra]);
+            double calorRuptura = pesoDelNivel(nivelQueCierra, largoActual, pLado) * diferencia / 2;
+            sumarCalor(dim, otro1, calorRuptura);
+            sumarCalor(dim, otro2, calorRuptura);
+        }
+
+        // PROLONGAR -> el mismo lado
+        int siguiente = largoActual + 1;
+        if (siguiente <= NIVEL_MAX) {
+            double diferencia = diferenciaDeRachas(esperadas[siguiente], ocurridas[siguiente]);
+            sumarCalor(dim, lado, pesoDelNivel(siguiente, siguiente, pLado) * diferencia);
+        }
     }
 
     /**
@@ -552,23 +719,44 @@ public final class Ruleta {
         }
     }
 
-    /** Probabilidad de un giro en cada lado de cada dimensión: [dimensión][0 = lado +1, 1 = lado -1]. */
+    /**
+     * Probabilidad de un giro en cada lado de cada dimensión: [dimensión][índice de lado].
+     * Binarias (2 lados): índice 0 = lado +1, índice 1 = lado -1.
+     * Ternarias (3 lados: DOCENA, COLUMNA): índice (lado-1) = lado 1, 2 o 3.
+     */
     private static final double[][] PROB_LADO = calcularProbLado();
 
     private static double[][] calcularProbLado() {
-        double[][] p = new double[Dimension.values().length][2];
+        double[][] p = new double[Dimension.values().length][];
         for (Dimension dim : Dimension.values()) {
-            for (int lado : new int[]{1, -1}) {
+            int[] lados = dim.esTernaria() ? new int[]{1, 2, 3} : new int[]{1, -1};
+            p[dim.ordinal()] = new double[lados.length];
+            for (int lado : lados) {
                 long cuantos = Arrays.stream(Valor.values()).filter(v -> v.valor != 0 && dim.de(v) == lado).count();
-                p[dim.ordinal()][lado == 1 ? 0 : 1] = cuantos / 37.0;
+                p[dim.ordinal()][indiceDeLado(dim, lado)] = cuantos / 37.0;
             }
         }
         return p;
     }
 
+    /** Índice dentro de PROB_LADO para un lado: binarias, 0 (lado +1) / 1 (lado -1); ternarias, lado-1 (0,1,2). */
+    private static int indiceDeLado(Dimension dim, int lado) {
+        return dim.esTernaria() ? lado - 1 : (lado == 1 ? 0 : 1);
+    }
+
     /** Probabilidad de que un giro caiga en ese lado de esa dimensión (el cero no está en ningún lado). */
     private double probLado(Dimension dim, int lado) {
-        return PROB_LADO[dim.ordinal()][lado == 1 ? 0 : 1];
+        return PROB_LADO[dim.ordinal()][indiceDeLado(dim, lado)];
+    }
+
+    /** Los lados reales de una dimensión: {1,-1} si es binaria, {1,2,3} si es ternaria. */
+    private int[] ladosDe(Dimension dim) {
+        return dim.esTernaria() ? new int[]{1, 2, 3} : new int[]{1, -1};
+    }
+
+    /** El lado contrario en una dimensión BINARIA (-lado); no tiene sentido en una ternaria (hay 2 contrarios). */
+    private int ladoContrario(int lado) {
+        return -lado;
     }
 
     /**
